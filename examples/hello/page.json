@@ -1,0 +1,19 @@
+{
+  "steps": [
+    {
+      "id": "step2",
+      "when": "Tue 17 Nov 2026 · 11:00",
+      "title": "A generated step from page.json",
+      "mark": "✅",
+      "tags": ["seed 2002"],
+      "text": "**Generated text is safe here:** `<Video 1>`, braces { } and < signs need no escaping.",
+      "inputs": [
+        { "id": "j-orig", "src": "in/original.mp4", "title": "<Video 1> · original clip", "meta": { "length": "3 s" } }
+      ],
+      "prompt": { "text": "A prompt given inline as text.", "title": "Prompt · inline" },
+      "results": [
+        { "id": "j-a", "src": "out/result-a.mp4", "title": "arm A again", "mark": "✅", "verdict": "kept", "time": "1.2 min", "compare": "j-orig" }
+      ]
+    }
+  ]
+}

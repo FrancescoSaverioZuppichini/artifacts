@@ -1,0 +1,29 @@
+---
+title: Hello review · an example page
+description: Every component once. Open http://127.0.0.1:8800/hello
+order: oldest-first
+---
+
+<Step id="intro" title="How this page is built" open>
+This step is hand-written MDX. The one after it comes from `page.json`, which is where scripts should put generated text.
+Write `<Video 1>` style tags only inside backticks in prose.
+</Step>
+
+<Step id="step1" when="Tue 17 Nov 2026 · 10:00" title="A hand-written step: inputs, prompt, results" mark="★ ❓" tags={["seed 1001", "3 s"]}>
+**Why:** show what goes in before what comes out.
+
+<Gallery title="Inputs">
+  <Media id="h-orig" src="in/original.mp4" title="<Video 1> · original clip" meta={{ length: "3 s" }} />
+  <Media id="h-ref" src="in/reference.jpg" title="<Picture 1> · reference" />
+</Gallery>
+
+<Prompt src="p/prompt.txt" title="Prompt · verbatim" />
+
+<Gallery title="Results">
+  <Media id="h-a" src="out/result-a.mp4" title="arm A" mark="★" verdict="colours shifted" time="1.2 min" compare="h-orig" />
+  <Media id="h-b" src="out/result-b.mp4" title="arm B" mark="❌" verdict="blurred" time="1.1 min" compare="h-orig" />
+  <Media id="h-pending" src="out/result-c.mp4" title="arm C · still rendering" />
+</Gallery>
+</Step>
+
+{props.data.steps.map((s) => <Step key={s.id} {...s} />)}

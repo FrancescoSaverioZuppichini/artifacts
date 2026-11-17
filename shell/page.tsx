@@ -85,7 +85,7 @@ export function Page() {
 					<div className="sticky top-6 flex max-h-[calc(100vh-3rem)] flex-col gap-4">
 						<a href="/" className="text-xs text-muted-foreground hover:text-foreground">← all pages</a>
 						<Status data={data} />
-						<Toc data={data} onPick={() => {}} />
+						<Toc data={data} />
 					</div>
 				</aside>
 				<article className="min-w-0">

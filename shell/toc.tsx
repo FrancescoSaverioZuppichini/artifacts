@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Badge } from "../components/badge";
 import { noteCount, useVersion } from "./state";
 
-type Entry = { id: string; date: string; title: string; badges: string[]; notes: number };
+type Item = { id: string; date: string; title: string; badges: string[]; notes: number };
 const sections = () => [...document.querySelectorAll<HTMLDetailsElement>("details.section")];
 
 // [Agent] A link target can be a section or a card: open every <details> around it, scroll, and ring a card.
@@ -15,8 +15,8 @@ export function jump(id: string) {
 	el.scrollIntoView({ block: el.dataset.card ? "center" : "start" });
 }
 
-export function Toc({ data, onPick }: { data: unknown; onPick: () => void }) {
-	const v = useVersion(), [entries, setEntries] = useState<Entry[]>([]), [active, setActive] = useState(""), list = useRef<HTMLDivElement>(null);
+export function Toc({ data, onPick }: { data: unknown; onPick?: () => void }) {
+	const v = useVersion(), [entries, setEntries] = useState<Item[]>([]), [active, setActive] = useState(""), list = useRef<HTMLDivElement>(null);
 	// [Agent] Read from the rendered sections, not from page.json, so sections written by hand in the MDX are listed too.
 	useLayoutEffect(() => {
 		const next = sections().map((el) => ({
@@ -51,7 +51,7 @@ export function Toc({ data, onPick }: { data: unknown; onPick: () => void }) {
 		</div>
 		<div ref={list} className="min-h-0 flex-1 overflow-y-auto p-1 pr-2 [scrollbar-width:none]">
 			<ul className="space-y-0.5">{entries.map((e) => <li key={e.id}>
-				<a href={`#${e.id}`} data-toc={e.id} aria-current={active === e.id ? "location" : undefined} onClick={(ev) => { ev.preventDefault(); jump(e.id); onPick(); }}
+				<a href={`#${e.id}`} data-toc={e.id} aria-current={active === e.id ? "location" : undefined} onClick={(ev) => { ev.preventDefault(); jump(e.id); onPick?.(); }}
 					className={`block rounded-md px-2 py-1 leading-snug text-muted-foreground transition-colors hover:bg-muted hover:text-foreground${active === e.id ? " bg-muted text-foreground" : ""}`}>
 					{e.date && <span className="block text-[11px] opacity-70">{e.date}</span>}
 					<span className="line-clamp-2">{e.title}</span>

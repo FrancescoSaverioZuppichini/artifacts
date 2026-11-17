@@ -16,6 +16,6 @@ document.addEventListener("click", (e) => {
 	const sel = getSelection();
 	if (sel && !sel.isCollapsed && sel.containsNode(e.target as Node, true)) { e.stopPropagation(); e.preventDefault(); }
 }, true);
-document.addEventListener("click", (e) => (e.target as HTMLElement).closest(".prose pre, pre.fold, .fold-wrap pre")?.classList.toggle("open"));
+document.addEventListener("click", (e) => (e.target as HTMLElement).closest(".prose pre")?.classList.toggle("open"));
 
 createRoot(document.getElementById("root")!).render(page ? <Page /> : <Home />);

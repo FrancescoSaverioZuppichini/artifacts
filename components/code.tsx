@@ -14,8 +14,8 @@ export function Code({ src, text, title, children }: { src?: string; text?: stri
 		setTimeout(() => setCopied(false), 1200);
 	};
 	const value = src ? loaded : text;
-	return <div className="not-prose mt-5" ref={box}>
+	return <div className="code not-prose mt-5" ref={box}>
 		<div className="flex items-center gap-2">{title && <h4 className="label m-0">{title}</h4>}<button className="btn ml-auto" onClick={copy}>{copied ? "Copied" : "Copy"}</button></div>
-		{value !== undefined ? <pre className="fold">{value}</pre> : <div className="fold-wrap">{children}</div>}
+		{value !== undefined ? <pre>{value}</pre> : children}
 	</div>;
 }

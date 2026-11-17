@@ -33,9 +33,8 @@ const subscribe = (f: () => void) => { subs.add(f); return () => { subs.delete(f
 export const review = (id: string) => reviews[id];
 export const useReview = (id: string) => useSyncExternalStore(subscribe, () => reviews[id]);
 export const useVersion = () => useSyncExternalStore(subscribe, () => version);
-export const hasNote = (id: string) => !!reviews[id]?.note?.trim();
 export const comments = () => Object.entries(reviews).filter(([, r]) => r?.kind === "comment" && !r.resolved);
-export const noteCount = (section: string, ids: string[]) => ids.filter(hasNote).length + comments().filter(([, r]) => r.section === section).length;
+export const noteCount = (section: string, ids: string[]) => ids.filter((id) => reviews[id]?.note?.trim()).length + comments().filter(([, r]) => r.section === section).length;
 
 // [Agent] A comment is not in the registry, so its own entry carries its section and quote. An id with no entry left was deleted.
 function body(id: string) {

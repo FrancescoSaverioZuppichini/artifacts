@@ -6,7 +6,7 @@ import { basename, join, resolve, sep } from "node:path";
 import rehypeSlug from "rehype-slug";
 import remarkGfm from "remark-gfm";
 import index from "./index.html";
-import type { Feedback, PageJson, Probe } from "./types";
+import { type Feedback, type PageJson, playable, type Probe } from "./types";
 
 const PORT = Number(process.env.PORT ?? 8800);
 const ROOTS = (process.env.ARTIFACTS_ROOTS ?? `${homedir()}/Documents:${homedir()}/Downloads`).split(":");
@@ -153,8 +153,8 @@ async function build(name: string, dir: string) {
 		const file = resolve(dir, src);
 		media[src] = inRoots(file) ? await probe(file) : null;
 	}));
-	const seen = new Set<string>(), dupes = found.ids.filter((id) => seen.size === seen.add(id).size);
-	const errors = [mdx.error, data.error, ...[...new Set(dupes)].map((id) => `duplicate id: ${id}`)].filter((e): e is string => !!e);
+	const dupes = new Set(found.ids.filter((id, i) => found.ids.indexOf(id) !== i));
+	const errors = [mdx.error, data.error, ...[...dupes].map((id) => `duplicate id: ${id}`)].filter((e): e is string => !!e);
 	return { name, mdx, data: data.data, media, errors, found };
 }
 
@@ -181,8 +181,8 @@ function serve(request: Request, file: string) {
 const missing = (what: string) => Response.json({ error: `Not found: ${what}` }, { status: 404 });
 
 // [Agent] /f/<page>?src= and /t/<page>?src=: src is relative to the page folder and may leave it, but never the roots.
-function fileOf(request: Request) {
-	const url = new URL(request.url), dir = pageDir(decodeURIComponent(url.pathname.split("/")[2] ?? ""));
+function fileOf(url: URL) {
+	const dir = pageDir(decodeURIComponent(url.pathname.split("/")[2] ?? ""));
 	if (!dir) return;
 	const file = resolve(dir, url.searchParams.get("src") ?? "");
 	return inRoots(file) && existsSync(file) ? { dir, file } : undefined;
@@ -215,7 +215,7 @@ function check(page: Awaited<ReturnType<typeof build>>) {
 		media: page.found.files.filter((f) => MEDIA.test(f)).length,
 		missing: Object.entries(page.media).filter(([, p]) => !p).map(([src]) => src),
 		errors: page.errors,
-		warnings: Object.entries(page.media).filter(([, p]) => p?.codec && !/^(h264|vp9|av1)$/.test(p.codec)).map(([src, p]) => `${src}: ${p!.codec} does not play in Chrome, re-encode to H.264`),
+		warnings: Object.entries(page.media).filter(([, p]) => !playable(p?.codec)).map(([src, p]) => `${src}: ${p!.codec} does not play in Chrome, re-encode to H.264`),
 		url: base,
 		links: Object.fromEntries(page.found.sections.map((id) => [id, `${base}#${id}`])),
 	};
@@ -269,16 +269,14 @@ Bun.serve({
 		},
 	},
 	fetch: async (request) => {
-		const path = new URL(request.url).pathname;
-		if (path.startsWith("/f/")) { const hit = fileOf(request); return hit ? serve(request, hit.file) : missing("file"); }
-		if (path.startsWith("/t/")) {
-			const hit = fileOf(request);
-			if (!hit) return missing("file");
-			const out = await thumb(hit.dir, hit.file, new URL(request.url).searchParams.get("s") === "view").catch(() => "");
-			if (!out) return missing("thumbnail");
-			return new Response(Bun.file(out), { headers: { "Content-Type": "image/jpeg", "Cache-Control": "public, max-age=31536000, immutable" } });
-		}
-		return missing("route");
+		const url = new URL(request.url), kind = url.pathname.slice(0, 3);
+		if (kind !== "/f/" && kind !== "/t/") return missing("route");
+		const hit = fileOf(url);
+		if (!hit) return missing("file");
+		if (kind === "/f/") return serve(request, hit.file);
+		const out = await thumb(hit.dir, hit.file, url.searchParams.get("s") === "view").catch(() => "");
+		if (!out) return missing("thumbnail");
+		return new Response(Bun.file(out), { headers: { "Content-Type": "image/jpeg", "Cache-Control": "public, max-age=31536000, immutable" } });
 	},
 	error: (error) => Response.json({ error: error.message }, { status: 400 }),
 });

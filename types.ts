@@ -6,6 +6,7 @@ export type MediaProps = { id?: string; src: string; title?: string; caption?: s
 export type PageJson = { sections?: SectionProps[] };
 
 export type Probe = { v: string; video: boolean; w: number; h: number; dur?: number; codec?: string };
+export const playable = (codec?: string) => !codec || /^(h264|vp9|av1)$/.test(codec);
 // [Agent] One entry per card, section, note or text comment id in feedback.json. A comment anchors by quote plus the text around it.
 // Entries from older versions may also carry step, stepTitle, set and section (then a title); they are kept as they are.
 export type Feedback = {

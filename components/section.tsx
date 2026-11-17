@@ -1,51 +1,131 @@
-import { type ReactNode, useContext, useLayoutEffect, useRef, useState } from "react";
-import { noteCount, PageCtx, registry, SectionCtx, useVersion } from "../shell/state";
-import type { SectionProps } from "../types";
-import { Badges, tone } from "./badge";
-import { components } from "./index";
-import { Note } from "./note";
+import { ChevronRight } from "lucide-react"
+import { type ReactNode, useContext, useLayoutEffect, useRef, useState } from "react"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { Comment } from "@/shell/comment"
+import {
+	countNotes,
+	PageCtx,
+	registry,
+	SectionCtx,
+	setOpen,
+	useOpen,
+	useReview,
+	useVersion,
+} from "@/shell/state"
+import type { SectionProps } from "@/types"
+import { Badges, tone } from "./badge"
+import { components } from "./index"
+import { Note } from "./note"
 
-// [Agent] A foldable chapter: native <details>, so a folded section costs nothing to lay out. The TOC is read from these elements, so
-// sections written by hand in the MDX are listed too.
-export function Section({ id, title, date, badges, open, blocks, children }: SectionProps & { children?: ReactNode }) {
-	const { sideBySide } = useContext(PageCtx), ref = useRef<HTMLDetailsElement>(null), [videos, setVideos] = useState(0);
-	registry.set(id, { id, src: "", kind: "section", title });
-	useLayoutEffect(() => { const n = ref.current!.querySelectorAll("[data-video]").length; if (n !== videos) setVideos(n); });
-	const playAll = (e: React.MouseEvent) => {
-		e.preventDefault();
-		sideBySide({ ids: [...ref.current!.querySelectorAll<HTMLElement>("[data-card][data-video]")].map((c) => c.dataset.card!), title });
-	};
-	return <SectionCtx.Provider value={{ id, title }}>
-		<details ref={ref} id={id} className="section scroll-mt-6 border-b py-3" data-date={date ?? ""} data-title={title}
-			data-badges={JSON.stringify(badges?.filter(tone) ?? [])} data-open={open ? "" : undefined}>
-			<summary className="not-prose flex gap-2 rounded-md px-1 py-1 hover:bg-muted/50">
-				<span className="chev mt-1 h-4 w-4 shrink-0 self-start text-center text-xs leading-4 text-muted-foreground">▶</span>
-				<div className="min-w-0 flex-1">
-					{date && <div className="text-xs text-muted-foreground">{date}</div>}
-					<div className="flex flex-wrap items-center gap-1.5"><h2 className="m-0 text-lg font-semibold tracking-tight text-balance">{title}</h2><Badges list={badges} status /></div>
-					<div className="mt-1 flex flex-wrap items-center gap-1">
-						<Badges list={badges} status={false} />
-						{videos > 1 && <button className="btn h-6 min-h-0 text-xs" onClick={playAll}>▶ Side by side · {videos} videos</button>}
-						<NoteCount id={id} />
-					</div>
-				</div>
-			</summary>
-			<div className="pt-2 pl-5">
-				{blocks?.map(({ type, ...props }, i) => {
-					const Block = components[type as keyof typeof components] as React.ComponentType<any> | undefined;
-					return Block ? <Block key={i} {...props} /> : <p key={i} className="text-red-300">Unknown block type “{type}”: register it in components/index.ts</p>;
-				})}
-				{children}
-				<div data-comments={id} />
-				<div className="mt-5"><Note id={id} placeholder="Note on this section…" /></div>
-			</div>
-		</details>
-	</SectionCtx.Provider>;
+const chevron = "text-muted-foreground transition-transform group-data-[state=open]/section:rotate-90"
+
+// [Agent] Its own subscriber, so a keystroke in a note re-renders this chip and not every card of the
+// section.
+function NoteCount({ section }: { section: string }) {
+	useVersion()
+	const ids = [...registry.values()].filter((entry) => entry.section === section).map((entry) => entry.id)
+	const count = countNotes(section, [section, ...ids])
+	return count > 0 && <Badge>💬 {count}</Badge>
 }
 
-// [Agent] Its own subscriber, so a keystroke in a note re-renders this chip and not every card of the section.
-function NoteCount({ id }: { id: string }) {
-	useVersion();
-	const n = noteCount(id, [id, ...[...registry.values()].filter((x) => x.section === id).map((x) => x.id)]);
-	return n ? <span className="chip">💬 {n}</span> : null;
+// [Agent] A foldable chapter. Folded content stays mounted (forceMount, hidden by CSS) so the contents, the
+// viewer, ←/→ and comment anchoring see every card. The contents is read from these data-* attributes, so
+// sections written by hand in the MDX are listed too.
+export function Section({
+	id,
+	title,
+	date,
+	badges,
+	open,
+	blocks,
+	children,
+}: SectionProps & { children?: ReactNode }) {
+	const { sideBySide } = useContext(PageCtx)
+	const isOpen = useOpen(id)
+	const note = useReview(id)?.note?.trim()
+	const ref = useRef<HTMLDivElement>(null)
+	const [videos, setVideos] = useState(0)
+	registry.set(id, { id, src: "", kind: "section", title })
+
+	useLayoutEffect(() => setVideos(ref.current!.querySelectorAll("[data-video]").length))
+
+	function playAll(e: React.MouseEvent) {
+		e.stopPropagation()
+		const cards = ref.current!.querySelectorAll<HTMLElement>("[data-card][data-video]")
+		sideBySide({ ids: [...cards].map((card) => card.dataset.card!), title })
+	}
+
+	// [Agent] The note shown under the title is a preview; a click opens the section and its note box to edit
+	// it.
+	function editNote(e: React.MouseEvent) {
+		e.stopPropagation()
+		setOpen(id, true)
+		requestAnimationFrame(() => {
+			const box = ref.current!.querySelector<HTMLElement>(`[data-note="${CSS.escape(id)}"]`)
+			box?.scrollIntoView({ block: "center" })
+			box?.focus()
+		})
+	}
+
+	return (
+		<SectionCtx.Provider value={{ id, title }}>
+			<Collapsible
+				ref={ref}
+				id={id}
+				open={isOpen}
+				onOpenChange={(next) => setOpen(id, next)}
+				data-section=""
+				data-date={date ?? ""}
+				data-title={title}
+				data-badges={JSON.stringify(badges?.filter(tone) ?? [])}
+				data-open={open ? "" : undefined}
+				className="group/section scroll-mt-6 border-b py-3"
+			>
+				{/* [Agent] The whole header folds on click; the chevron is the keyboard-reachable trigger. */}
+				<div
+					className="not-prose flex cursor-pointer gap-2 rounded-md p-1 hover:bg-muted/50"
+					onClick={() => setOpen(id, !isOpen)}
+				>
+					<CollapsibleTrigger asChild onClick={(e) => e.stopPropagation()}>
+						<Button variant="ghost" size="icon-xs" aria-label={isOpen ? "Fold" : "Unfold"}>
+							<ChevronRight className={chevron} />
+						</Button>
+					</CollapsibleTrigger>
+					<div className="min-w-0 flex-1">
+						{date && <div className="text-xs text-muted-foreground">{date}</div>}
+						<div className="flex flex-wrap items-center gap-1.5">
+							<h2 className="text-lg font-semibold tracking-tight text-balance">{title}</h2>
+							<Badges list={badges} status />
+						</div>
+						<div className="mt-1 flex flex-wrap items-center gap-1 empty:hidden">
+							<Badges list={badges} status={false} />
+							{videos > 1 && (
+								<Button size="xs" onClick={playAll}>
+									▶ Side by side · {videos} videos
+								</Button>
+							)}
+							<NoteCount section={id} />
+						</div>
+						{note && <Comment text={note} line={!isOpen} className="mt-2 cursor-text" onClick={editNote} />}
+					</div>
+				</div>
+				<CollapsibleContent forceMount className="pl-8 data-[state=closed]:hidden">
+					{blocks?.map(({ type, ...props }, i) => {
+						const Block = components[type as keyof typeof components] as React.ComponentType<any>
+						if (Block) return <Block key={i} {...props} />
+						return (
+							<p key={i} className="text-red-300">
+								Unknown block type “{type}”: register it in components/index.ts
+							</p>
+						)
+					})}
+					{children}
+					<div data-comments={id} />
+					<Note id={id} placeholder="Note on this section…" />
+				</CollapsibleContent>
+			</Collapsible>
+		</SectionCtx.Provider>
+	)
 }

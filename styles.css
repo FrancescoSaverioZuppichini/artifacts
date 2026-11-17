@@ -1,54 +1,65 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 @plugin "@tailwindcss/typography";
 
+@custom-variant dark (&:is(.dark *));
+
+/* [Agent] shadcn's colour names, set straight to the app's dark palette; there is no light theme. */
 @theme {
 	--font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
 	--font-mono: "Geist Mono Variable", ui-monospace, monospace;
+	--radius-sm: 0.375rem;
+	--radius-md: 0.5rem;
+	--radius-lg: 0.625rem;
+	--radius-xl: 0.875rem;
 	--color-background: oklch(0.145 0 0);
 	--color-foreground: oklch(0.985 0 0);
+	--color-card: oklch(0.17 0 0);
+	--color-card-foreground: oklch(0.985 0 0);
+	--color-popover: oklch(0.16 0 0);
+	--color-popover-foreground: oklch(0.985 0 0);
+	--color-secondary: oklch(0.269 0 0);
+	--color-secondary-foreground: oklch(0.985 0 0);
 	--color-muted: oklch(0.205 0 0);
 	--color-muted-foreground: oklch(0.708 0 0);
 	--color-accent: oklch(0.22 0 0);
+	--color-accent-foreground: oklch(0.985 0 0);
+	--color-destructive: oklch(0.704 0.191 22.216);
 	--color-border: oklch(1 0 0 / 10%);
-	--color-popover: oklch(0.16 0 0);
+	--color-input: oklch(1 0 0 / 15%);
+	--color-ring: oklch(0.556 0 0);
 }
 
-:root { --card-h: 200px; color-scheme: dark; }
-* { border-color: var(--color-border); }
-body { @apply bg-background font-sans text-foreground antialiased; }
-dialog::backdrop { background: black; }
-
-@layer components {
-	.btn { @apply inline-flex min-h-7 cursor-pointer items-center gap-1 rounded-md border bg-muted px-2 text-sm hover:bg-accent hover:text-foreground disabled:opacity-40; }
-	.btn[aria-pressed="true"] { @apply border-foreground/40 bg-accent; }
-	.vote[data-vote="up"][aria-pressed="true"] { @apply border-green-600 bg-green-950; }
-	.vote[data-vote="down"][aria-pressed="true"] { @apply border-red-500 bg-red-950; }
-	.chip { @apply inline-flex items-center rounded-full border px-1.5 text-[11px] whitespace-nowrap text-muted-foreground; }
-	.label { @apply mb-2 text-sm font-medium text-muted-foreground; }
-	.badge { @apply inline-flex items-center rounded px-1 text-xs font-semibold whitespace-nowrap; }
-	.badge-ok { @apply bg-green-950 text-green-300; }
-	.badge-bad { @apply bg-red-950 text-red-300; }
-	.badge-star { @apply bg-yellow-950 text-yellow-300; }
-	.badge-ask { @apply bg-amber-400 text-black; }
-	.note { @apply w-full resize-y rounded-md border bg-muted p-2 text-sm placeholder:text-muted-foreground/70; }
+:root {
+	color-scheme: dark;
+	--card-h: 200px;
 }
 
-/* [Agent] No content-visibility on open sections: its size guesses made #section jumps land short. */
-details.section > summary { list-style: none; cursor: pointer; }
-details.section > summary::-webkit-details-marker { display: none; }
-details.section > summary .chev { transition: transform .15s; }
-details.section[open] > summary .chev { transform: rotate(90deg); }
+@layer base {
+	* {
+		@apply border-border outline-ring/50;
+	}
+	body {
+		@apply bg-background font-sans text-foreground antialiased;
+	}
+}
 
-.card { width: max(11rem, min(100%, calc(var(--card-h) * var(--ar, 0.75)))); }
-.card .thumb { height: var(--card-h); }
-.card.picked { outline: 3px solid var(--color-amber-400); outline-offset: 2px; }
+/* [Agent] Long code (fenced blocks and <Code>) is folded to a few lines; app.tsx toggles .open on click. */
+.prose pre {
+	max-height: 9.5rem;
+	overflow: hidden;
+	cursor: pointer;
+	white-space: pre-wrap;
+	mask-image: linear-gradient(black 60%, transparent);
+}
+.prose pre.open {
+	max-height: none;
+	mask-image: none;
+}
 
-.prose pre { max-height: 9.5rem; overflow: hidden; cursor: pointer; white-space: pre-wrap; mask-image: linear-gradient(black 60%, transparent); }
-.prose pre.open { max-height: none; mask-image: none; }
-.code pre { @apply mt-1 rounded-md border bg-muted p-3 font-mono text-[12.5px] leading-relaxed; }
-
-::highlight(comment) { background-color: oklch(0.85 0.17 90 / 0.22); }
-::highlight(comment-active) { background-color: oklch(0.85 0.17 90 / 0.5); }
-
-.stage { container-type: size; }
-.hide-ov .overlay { display: none; }
+::highlight(comment) {
+	background-color: oklch(0.85 0.17 90 / 0.22);
+}
+::highlight(comment-active) {
+	background-color: oklch(0.85 0.17 90 / 0.5);
+}

@@ -1,33 +1,96 @@
-import { useContext } from "react";
-import { picks, PageCtx, registry, SectionCtx, thumbUrl, useReview } from "../shell/state";
-import { Votes } from "../shell/votes";
-import { type MediaProps, playable } from "../types";
-import { Badges, tone } from "./badge";
+import { type CSSProperties, useContext } from "react"
+import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
+import { cn } from "@/lib/utils"
+import { Comment } from "@/shell/comment"
+import { PageCtx, picks, registry, SectionCtx, thumbUrl, useReview } from "@/shell/state"
+import { Votes } from "@/shell/votes"
+import { type MediaProps, playable } from "@/types"
+import { Badges, tone } from "./badge"
 
-// [Agent] A poster-only card: the grid never loads a video, it plays in the viewer. Fixed height, width from the probed aspect ratio, so
-// nothing moves when thumbnails land; a file that is not there yet is a ⏳ card that fills in by itself.
+// [Agent] Fixed height from the S/M/L setting, width from the probed aspect ratio, so nothing moves when
+// thumbnails land. ?pick= and #card links ring the card through data-picked.
+const card = cn(
+	"not-prose cursor-zoom-in gap-0 overflow-hidden rounded-lg py-0 shadow-none hover:border-foreground/30",
+	"w-[max(11rem,min(100%,calc(var(--card-h)*var(--ar,0.75))))]",
+	"data-picked:outline-3 data-picked:outline-offset-2 data-picked:outline-amber-400",
+)
+const onThumb = "border-0 bg-black/70 text-foreground"
+
+// [Agent] A poster-only card: the grid never loads a video, it plays in the viewer. A file that is not there
+// yet is a ⏳ card that fills in by itself.
 export function Media(props: MediaProps) {
-	const { media, view } = useContext(PageCtx), section = useContext(SectionCtx);
-	const id = props.id ?? props.src, p = media[props.src], r = useReview(id);
-	registry.set(id, { ...props, id, kind: "media", section: section?.id, sectionTitle: section?.title });
-	const note = r?.note?.trim().split("\n")[0];
-	return <figure id={id} data-card={id} data-video={p?.video || undefined} onClick={() => view(id)}
-		className={`card not-prose m-0 flex cursor-zoom-in flex-col overflow-hidden rounded-lg border bg-muted/40 hover:border-foreground/30${picks.has(id) ? " picked" : ""}`}
-		style={{ "--ar": p?.w ? p.w / p.h : undefined } as React.CSSProperties}>
-		<div className="thumb relative grid place-items-center bg-black">
-			{p ? <img src={thumbUrl(props.src, p)} loading="lazy" decoding="async" alt="" className="absolute inset-0 size-full object-contain" />
-				: <span className="px-3 text-center text-sm text-muted-foreground">⏳ not there yet<br /><span className="text-[11px] break-all">{props.src}</span></span>}
-			<div className="absolute top-1.5 left-1.5 flex gap-1">
-				{p?.video && <span className="chip border-0 bg-black/70 text-foreground">▶ {p.dur ? `${p.dur.toFixed(1)} s` : ""}</span>}
-				{props.compare && <span className="chip border-0 bg-black/70 text-foreground" title={`compare: ${props.compare}`}>⇆</span>}
-				{!playable(p?.codec) && <span className="chip border-0 bg-red-900 text-red-100" title="Chrome cannot play this codec; re-encode to H.264">⚠ {p?.codec}</span>}
+	const { media, view } = useContext(PageCtx)
+	const section = useContext(SectionCtx)
+	const id = props.id ?? props.src
+	const probe = media[props.src]
+	const note = useReview(id)?.note?.trim()
+	registry.set(id, { ...props, id, kind: "media", section: section?.id, sectionTitle: section?.title })
+
+	return (
+		<Card
+			id={id}
+			data-card={id}
+			data-video={probe?.video || undefined}
+			data-picked={picks.has(id) || undefined}
+			style={{ "--ar": probe?.w ? probe.w / probe.h : undefined } as CSSProperties}
+			onClick={() => view(id)}
+			className={card}
+		>
+			<div className="relative grid h-(--card-h) place-items-center bg-black">
+				{probe ? (
+					<img
+						src={thumbUrl(props.src, probe)}
+						loading="lazy"
+						decoding="async"
+						alt=""
+						className="absolute inset-0 size-full object-contain"
+					/>
+				) : (
+					<span className="px-3 text-center text-sm text-muted-foreground">
+						⏳ not there yet
+						<br />
+						<span className="text-[11px] break-all">{props.src}</span>
+					</span>
+				)}
+				<div className="absolute top-1.5 left-1.5 flex gap-1">
+					{probe?.video && (
+						<Badge className={onThumb}>▶ {probe.dur ? `${probe.dur.toFixed(1)} s` : ""}</Badge>
+					)}
+					{props.compare && (
+						<Badge className={onThumb} title={`compare: ${props.compare}`}>
+							⇆
+						</Badge>
+					)}
+					{!playable(probe?.codec) && (
+						<Badge variant="destructive" title="Chrome cannot play this codec; re-encode to H.264">
+							⚠ {probe?.codec}
+						</Badge>
+					)}
+				</div>
 			</div>
-		</div>
-		<figcaption className="flex flex-1 flex-col gap-1 p-2 text-[13px] leading-snug">
-			<div className="flex flex-wrap items-baseline gap-1"><Badges list={props.badges} status /><b className="line-clamp-2 font-medium" title={props.title}>{props.title ?? props.src.split("/").pop()}</b></div>
-			{props.caption && <div className="line-clamp-2 text-muted-foreground" title={props.caption}>{props.caption}</div>}
-			{props.badges?.some((b) => !tone(b)) && <div className="flex flex-wrap gap-1"><Badges list={props.badges} status={false} /></div>}
-			<div className="mt-auto flex items-center gap-1 pt-1"><Votes id={id} />{note && <span className="truncate text-muted-foreground italic" title={r?.note}>💬 {note}</span>}</div>
-		</figcaption>
-	</figure>;
+			<div className="flex flex-1 flex-col gap-1 p-2 text-[13px] leading-snug">
+				<div className="flex flex-wrap items-baseline gap-1">
+					<Badges list={props.badges} status />
+					<b className="line-clamp-2 font-medium" title={props.title}>
+						{props.title ?? props.src.split("/").pop()}
+					</b>
+				</div>
+				{props.caption && (
+					<div className="line-clamp-2 text-muted-foreground" title={props.caption}>
+						{props.caption}
+					</div>
+				)}
+				{props.badges?.some((text) => !tone(text)) && (
+					<div className="flex flex-wrap gap-1">
+						<Badges list={props.badges} status={false} />
+					</div>
+				)}
+				<div className="mt-auto flex min-w-0 items-center gap-1 pt-1">
+					<Votes id={id} />
+					{note && <Comment text={note} line className="min-w-0 flex-1 text-xs" />}
+				</div>
+			</div>
+		</Card>
+	)
 }

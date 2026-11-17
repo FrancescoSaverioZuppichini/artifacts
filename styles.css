@@ -1,7 +1,6 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
-/* Dark colour tokens and the Geist font, so pages read like a blog. */
 @theme {
 	--font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
 	--font-mono: "Geist Mono Variable", ui-monospace, monospace;
@@ -26,27 +25,24 @@ dialog::backdrop { background: black; }
 	.vote[data-vote="down"][aria-pressed="true"] { @apply border-red-500 bg-red-950; }
 	.chip { @apply inline-flex items-center rounded-full border px-1.5 text-[11px] whitespace-nowrap text-muted-foreground; }
 	.label { @apply mb-2 text-sm font-medium text-muted-foreground; }
-	.mark { @apply inline-flex items-center rounded px-1 text-xs font-semibold whitespace-nowrap; }
-	.mark-ok { @apply bg-green-950 text-green-300; }
-	.mark-bad { @apply bg-red-950 text-red-300; }
-	.mark-star { @apply bg-yellow-950 text-yellow-300; }
-	.mark-ask { @apply bg-amber-400 text-black; }
+	.badge { @apply inline-flex items-center rounded px-1 text-xs font-semibold whitespace-nowrap; }
+	.badge-ok { @apply bg-green-950 text-green-300; }
+	.badge-bad { @apply bg-red-950 text-red-300; }
+	.badge-star { @apply bg-yellow-950 text-yellow-300; }
+	.badge-ask { @apply bg-amber-400 text-black; }
 	.note { @apply w-full resize-y rounded-md border bg-muted p-2 text-sm placeholder:text-muted-foreground/70; }
 }
 
-/* Steps: native <details>, our own chevron. No content-visibility on open steps: its size guesses made #step jumps land short;
-   folded steps already skip their content, which is where the cost was. */
-details.step > summary { list-style: none; cursor: pointer; }
-details.step > summary::-webkit-details-marker { display: none; }
-details.step > summary .chev { transition: transform .15s; }
-details.step[open] > summary .chev { transform: rotate(90deg); }
+/* [Agent] No content-visibility on open sections: its size guesses made #section jumps land short. */
+details.section > summary { list-style: none; cursor: pointer; }
+details.section > summary::-webkit-details-marker { display: none; }
+details.section > summary .chev { transition: transform .15s; }
+details.section[open] > summary .chev { transform: rotate(90deg); }
 
-/* Cards: fixed height, width from the probed aspect ratio, so nothing moves when thumbnails arrive. */
 .card { width: max(11rem, min(100%, calc(var(--card-h) * var(--ar, 0.75)))); }
 .card .thumb { height: var(--card-h); }
 .card.picked { outline: 3px solid var(--color-amber-400); outline-offset: 2px; }
 
-/* Long verbatim text (prompts and fenced blocks): a few lines with a fade; click opens. */
 .prose pre, pre.fold, .fold-wrap pre { max-height: 9.5rem; overflow: hidden; cursor: pointer; white-space: pre-wrap; mask-image: linear-gradient(black 60%, transparent); }
 .prose pre.open, pre.fold.open, .fold-wrap pre.open { max-height: none; mask-image: none; }
 pre.fold, .fold-wrap pre { @apply mt-1 rounded-md border bg-muted p-3 font-mono text-[12.5px] leading-relaxed; }

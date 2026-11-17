@@ -1,2 +1,2 @@
-A short example prompt.
-It is shown verbatim, collapsed, with a Copy button.
+A short block of verbatim text, read from a file.
+It is shown as written, folded, with a Copy button.

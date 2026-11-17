@@ -6,10 +6,10 @@ import { basename, join, resolve, sep } from "node:path";
 import rehypeSlug from "rehype-slug";
 import remarkGfm from "remark-gfm";
 import index from "./index.html";
-import type { Item, Probe, Review, Step } from "./types";
+import type { Feedback, PageJson, Probe } from "./types";
 
 const PORT = Number(process.env.PORT ?? 8800);
-const ROOTS = (process.env.REVIEW_ROOTS ?? `${homedir()}/Documents:${homedir()}/Downloads`).split(":");
+const ROOTS = (process.env.PINBOARD_ROOTS ?? `${homedir()}/Documents:${homedir()}/Downloads`).split(":");
 const MEDIA = /\.(png|jpe?g|webp|avif|gif|bmp|tiff?|mp4|webm|mov|m4v|mkv)$/i, VIDEO = /\.(mp4|webm|mov|m4v|mkv)$/i;
 
 const mtime = (file: string) => { try { return statSync(file).mtimeMs; } catch { return 0; } };
@@ -76,7 +76,7 @@ async function probe(file: string): Promise<Probe | null> {
 }
 
 const mdxCache = new Map<string, { stamp: string; code: string; meta: Record<string, string>; raw: string; error?: string }>();
-type Data = { stamp: string; data: { steps?: Step[] }; error?: string };
+type Data = { stamp: string; data: PageJson; error?: string };
 const dataCache = new Map<string, Data>();
 
 // [Agent] Compiled once per change of page.mdx. On a compile error the last good code stays and the error travels to the page banner and /api/check.
@@ -111,30 +111,42 @@ function loadData(dir: string) {
 	return entry;
 }
 
-const readFeedback = (dir: string): Record<string, Review> => {
+const readFeedback = (dir: string): Record<string, Feedback> => {
 	try { return JSON.parse(readFileSync(join(dir, "feedback.json"), "utf8")); } catch { return {}; }
 };
 
-const stepItems = (s: Step) => [...(s.inputs ?? []), ...(s.results ?? [])];
-const promptsOf = (s: Step) => [s.prompt ?? []].flat();
-
-// [Agent] Everything a page points at: items and steps from page.json plus whatever `<Media>`/`<Step>`/`<Prompt>` attributes the MDX holds.
-// The MDX side is a regex, not an evaluation, so it sees literal attributes only; that is all agents are told to write.
-function scan(raw: string, data: { steps?: Step[] }) {
-	const steps = data.steps ?? [], items: Item[] = steps.flatMap(stepItems);
-	const ids = [...steps.map((s) => s.id), ...items.map((it) => it.id ?? it.src)], mdxSteps: string[] = [];
-	let mdxItems = 0;
-	for (const [, tag, id] of raw.matchAll(/<(Step|Media)\b[^>]*?\bid=["']([^"']+)["']/g)) { ids.push(id); tag === "Step" ? mdxSteps.push(id) : mdxItems++; }
-	const files = new Set([...items.map((it) => it.src), ...steps.flatMap(promptsOf).map((p) => p.src).filter((s): s is string => !!s)]);
-	for (const [, src] of raw.matchAll(/<(?:Media|Prompt)\b[^>]*?\bsrc=["']([^"']+)["']/g)) files.add(src);
+// [Agent] Everything a page points at. page.json is walked whole, so blocks of any component count, custom ones included. The MDX side is
+// a regex over literal attributes of capitalised tags, which is all agents are told to write there.
+function scan(raw: string, data: PageJson) {
+	const ids: string[] = [], files = new Set<string>(), refs: string[] = [], badges: string[] = [];
+	const walk = (v: unknown): void => {
+		if (Array.isArray(v)) return v.forEach(walk);
+		if (!v || typeof v !== "object") return;
+		const o = v as Record<string, unknown>;
+		if (typeof o.id === "string") ids.push(o.id);
+		if (typeof o.src === "string") files.add(o.src);
+		if (typeof o.compare === "string") refs.push(o.compare);
+		if (Array.isArray(o.badges)) badges.push(...o.badges);
+		Object.values(o).forEach(walk);
+	};
+	walk(data);
+	const attr = (name: string, tag = "[A-Z]\\w*") => [...raw.matchAll(new RegExp(`<${tag}\\b[^>]*?\\b${name}=["']([^"']+)["']`, "g"))].map((m) => m[1]);
+	ids.push(...attr("id"));
+	attr("src").forEach((f) => files.add(f));
+	refs.push(...attr("compare"));
+	for (const [, list] of raw.matchAll(/badges=\{\[([^\]]*)\]\}/g)) badges.push(list);
 	const known = new Set(ids);
-	for (const it of items) if (it.compare && !known.has(it.compare)) files.add(it.compare);
-	for (const [, ref] of raw.matchAll(/\bcompare=["']([^"']+)["']/g)) if (!known.has(ref)) files.add(ref);
-	return { steps, items, ids, stepIds: [...mdxSteps, ...steps.map((s) => s.id)], itemCount: items.length + mdxItems, files: [...files].filter((f) => !/^https?:/.test(f)) };
+	for (const ref of refs) if (!known.has(ref)) files.add(ref);
+	return {
+		ids,
+		sections: [...attr("id", "Section"), ...(data.sections ?? []).map((s) => s.id)],
+		files: [...files].filter((f) => !/^https?:/.test(f)),
+		waiting: badges.join().match(/❓/g)?.length ?? 0,
+	};
 }
 
 async function build(name: string, dir: string) {
-	const [mdx, data] = [await loadMdx(dir), loadData(dir)];
+	const mdx = await loadMdx(dir), data = loadData(dir);
 	const found = scan(mdx.raw, data.data);
 	const media: Record<string, Probe | null> = {};
 	await Promise.all(found.files.map(async (src) => {
@@ -143,7 +155,7 @@ async function build(name: string, dir: string) {
 	}));
 	const seen = new Set<string>(), dupes = found.ids.filter((id) => seen.size === seen.add(id).size);
 	const errors = [mdx.error, data.error, ...[...new Set(dupes)].map((id) => `duplicate id: ${id}`)].filter((e): e is string => !!e);
-	return { name, dir, mdx, data: data.data, media, errors, found };
+	return { name, mdx, data: data.data, media, errors, found };
 }
 
 // [Agent] Every JSON answer carries a hash of its body; a tab that already has that version gets an empty 304, so the 5 s poll costs nothing.
@@ -196,23 +208,16 @@ async function thumb(dir: string, file: string, view: boolean) {
 }
 
 function check(page: Awaited<ReturnType<typeof build>>) {
-	const { steps } = page.found, warnings: string[] = [];
-	for (const s of steps) {
-		if (s.results?.length && !s.inputs?.length) warnings.push(`${s.id}: results without inputs`);
-		// [Agent] Only judged renders (a mark or a verdict) need the ⏱; check frames and side-by-side strips derived from them do not.
-		for (const it of s.results ?? []) if (!it.time && (it.mark || it.verdict)) warnings.push(`${s.id}/${it.id ?? it.src}: result without time`);
-	}
-	for (const [src, p] of Object.entries(page.media)) if (p?.codec && !/^(h264|vp9|av1)$/.test(p.codec)) warnings.push(`${src}: ${p.codec} does not play in Chrome, re-encode to H.264`);
 	const base = `http://127.0.0.1:${PORT}/${encodeURIComponent(page.name)}`;
 	return {
 		ok: !page.errors.length,
-		steps: page.found.stepIds.length,
-		items: page.found.itemCount,
+		sections: page.found.sections.length,
+		media: page.found.files.filter((f) => MEDIA.test(f)).length,
 		missing: Object.entries(page.media).filter(([, p]) => !p).map(([src]) => src),
 		errors: page.errors,
-		warnings,
+		warnings: Object.entries(page.media).filter(([, p]) => p?.codec && !/^(h264|vp9|av1)$/.test(p.codec)).map(([src, p]) => `${src}: ${p!.codec} does not play in Chrome, re-encode to H.264`),
 		url: base,
-		links: Object.fromEntries(page.found.stepIds.map((id) => [id, `${base}#${id}`])),
+		links: Object.fromEntries(page.found.sections.map((id) => [id, `${base}#${id}`])),
 	};
 }
 
@@ -226,13 +231,11 @@ Bun.serve({
 		"/:page": index,
 		"/api/pages": async (request) => {
 			const list = await Promise.all([...discover(true)].map(async ([name, dir]) => {
-				const { mdx, data } = await build(name, dir).catch(() => ({ mdx: { meta: {} as Record<string, string>, raw: "" }, data: {} as { steps?: Step[] } }));
-				const steps: Step[] = data.steps ?? [];
-				const marks = [...steps.flatMap((s) => [s.mark, ...stepItems(s).map((it) => it.mark)]), ...[...mdx.raw.matchAll(/\bmark=["']([^"']*)["']/g)].map((m) => m[1])];
+				const p = await build(name, dir).catch(() => null);
 				return {
-					name, title: mdx.meta.title ?? name, description: mdx.meta.description ?? "",
+					name, title: p?.mdx.meta.title ?? name, description: p?.mdx.meta.description ?? "",
 					updated: Math.max(mtime(join(dir, "page.mdx")), mtime(join(dir, "page.json"))),
-					waiting: marks.filter((m) => m?.includes("❓")).length,
+					waiting: p?.found.waiting ?? 0,
 					notes: Object.values(readFeedback(dir)).filter((r) => r.note?.trim()).length,
 				};
 			}));
@@ -251,13 +254,13 @@ Bun.serve({
 		},
 		"/api/feedback": {
 			POST: async (request) => {
-				const { page, id, vote, note, kind, step, stepTitle, title, src } = JSON.parse(await request.text());
+				const { page, id, ...entry } = JSON.parse(await request.text());
 				const dir = typeof page === "string" && pageDir(page);
 				if (!dir || typeof id !== "string" || !id) return missing("page or id");
 				// [Agent] Reread, merge and write in one synchronous step so overlapping saves cannot clobber each other; the rename means nobody
-				// reads half a file. Fields the old app wrote (set, section) survive the spread.
+				// reads half a file. Fields older versions wrote survive the spread.
 				const file = join(dir, "feedback.json"), all = readFeedback(dir);
-				all[id] = { ...all[id], vote: vote ?? null, note: note ?? "", updatedAt: new Date().toISOString(), kind, step, stepTitle, title, src };
+				all[id] = { ...all[id], ...entry, updatedAt: new Date().toISOString() };
 				writeFileSync(`${file}.tmp`, JSON.stringify(all, null, 2) + "\n");
 				renameSync(`${file}.tmp`, file);
 				return Response.json(all[id]);

@@ -1,0 +1,36 @@
+---
+title: Studio renders
+description: One object, four lighting setups. Pick the one to upscale.
+order: oldest-first
+---
+
+<Section id="base" date="Tue 17 Nov 2026 · 09:10" title="Base renders" badges={["✅ kept", "seed 1001"]}>
+**Why:** lock the object, the camera and the key light before any colour goes in. Two key positions; the left one
+stays <Badge>✅ kept</Badge> and is the reference for everything below.
+
+<Gallery title="Key light">
+  <Media id="key-left" src="in/key-only.png" title="key from the left" caption="kept: the reference" badges={["✅"]} />
+  <Media id="key-right" src="in/key-right.png" title="key from the right" caption="flatter, highlight too central" />
+</Gallery>
+
+<Code title="Scene" text={`object    sphere, radius 0.25 of frame height, on a seamless floor
+camera    480 × 360, straight on, horizon at 62 %
+key light (-0.55, 0.55, 0.63), white, Lambert + Blinn specular (power 40)
+seed      1001`} />
+</Section>
+
+<Section id="lighting" date="Tue 17 Nov 2026 · 10:00" title="Lighting study" badges={["★", "❓ your call", "seed 1001", "4 renders"]}>
+**Why:** same object and key light; each version only changes the rim light colour. The videos swing that light
+±35° and back, so you can see how it wraps the edge. Open a version and drag the wipe to compare it with the source.
+
+<Gallery title="Versions">
+  <Media id="source" src="in/key-only.png" title="key light only" caption="reference" badges={["source"]} />
+  <Media id="warm-rim" src="out/warm-rim.mp4" title="warm rim" badges={["★", "3200 K", "⏱ 1.2 min"]} compare="source" />
+  <Media id="cool-fill" src="out/cool-fill.mp4" title="cool fill" badges={["5600 K", "⏱ 1.1 min"]} compare="source" />
+  <Media id="top-gel" src="out/top-gel.mp4" title="top light" badges={["gel", "⏱ 1.3 min"]} compare="source" />
+</Gallery>
+
+<Note id="lighting-pick" placeholder="Which one goes to the upscale pass, and why?" />
+</Section>
+
+{props.data.sections.map((s) => <Section key={s.id} {...s} />)}

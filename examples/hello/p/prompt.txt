@@ -1,2 +1,0 @@
-A short block of verbatim text, read from a file.
-It is shown as written, folded, with a Copy button.

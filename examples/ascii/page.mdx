@@ -1,0 +1,62 @@
+---
+title: ASCII art, rendered to video
+description: A spinning donut, a sphere, a plasma and some rain, drawn with twelve characters and turned into MP4s.
+order: oldest-first
+---
+
+<Section id="intro" title="Why draw with characters" open>
+A terminal has no pixels, only a grid of letters. Pick letters by how much ink they put on the cell and the grid
+becomes a grey-scale screen: `.` is almost black, `@` is almost white. This page renders a few classic toys that
+way, draws each frame into an image with a monospace font, and hands the frames to ffmpeg. Everything comes from
+one script, `make.py`, so rerunning it rebuilds every video, still and the generated section at the end.
+
+<Badge>★ start with the donut</Badge> <Badge>6 s each</Badge> <Badge>24 fps</Badge> <Badge>H.264</Badge>
+</Section>
+
+<Section id="donut" date="Tue 17 Nov 2026 · 15:00" title="How the donut works" badges={["★", "torus", "two rotations"]}>
+**The shape.** Take a circle of radius 1, sitting 2 units away from the y axis, and sweep it all the way round that
+axis: that is a torus. Every point on it has two angles, θ around the small circle and φ around the axis.
+
+**The motion.** Each frame turns the whole torus by two angles, A around x and B around z, so it tumbles instead of
+spinning flat. A frame is just a different A and B.
+
+**The picture.** Each point is pushed back 8 units, divided by its depth (things far away get small), and dropped
+into a 100 × 42 grid of cells. Cells are twice as tall as wide, so y is halved. A z-buffer keeps only the nearest
+point per cell.
+
+<Code title="The core of donut() in make.py" text={`x = cx * (cb * cp + sa * sb * sp) - cy * ca * sb
+y = cx * (sb * cp - sa * cb * sp) + cy * ca * cb
+ooz = 1 / (k2 + ca * cx * sp + cy * sa)          # one over depth
+col = int(COLS / 2 + k1 * ooz * x)
+row = int(ROWS / 2 - k1 * ooz * y / 2)           # cells are twice as tall
+light = cp * ct * sb - ca * ct * sp - sa * st + cb * (ca * st - ct * sa * sp)
+if light > 0 and ooz > depth[row][col]:          # facing us, and nearest so far
+    depth[row][col] = ooz
+    grid[row][col] = shade(light / 1.5)`} />
+
+<Gallery title="Mono and amber phosphor">
+  <Media id="donut-mono" src="out/donut-mono.mp4" title="donut · mono" caption="brightness comes from the character alone" badges={["mono"]} />
+  <Media id="donut-amber" src="out/donut-amber.mp4" title="donut · amber" caption="the same frames, tinted by light level" badges={["★", "amber"]} compare="donut-mono" />
+</Gallery>
+</Section>
+
+<Section id="shading" date="Tue 17 Nov 2026 · 15:30" title="Shading with 12 characters" badges={["❓ your call", "luminance ramp"]}>
+The light value is the surface normal dotted with a light behind the viewer, from 0 (edge on) to about 1.4 (facing
+it). Divided by 1.5 it lands in 0 to 1, and that picks one of twelve characters, from thin to heavy:
+`.,-~:;=!*#$@`. The ramp is the whole trick: swap it for `" .:-=+*#%@"` and the donut looks softer, swap in
+letters and it looks like noise.
+
+Colour is the same idea on a second channel: the amber version draws each light level in its own shade, so the
+character and the colour agree. Four stills from the mono run, 1.25 s apart:
+
+<Gallery title="Stills">
+  <Media id="still-0" src="stills/donut-mono-000.png" title="0.00 s" />
+  <Media id="still-30" src="stills/donut-mono-030.png" title="1.25 s" />
+  <Media id="still-60" src="stills/donut-mono-060.png" title="2.50 s" />
+  <Media id="still-90" src="stills/donut-mono-090.png" title="3.75 s" />
+</Gallery>
+
+<Note id="ramp" placeholder="Which ramp should the next run use: the classic 12, or a softer 10?" />
+</Section>
+
+{props.data.sections.map((s) => <Section key={s.id} {...s} />)}

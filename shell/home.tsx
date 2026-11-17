@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { Badge } from "@/components/ui/badge"
+import { Time } from "./time"
 
 type Listed = {
 	name: string
@@ -31,7 +32,9 @@ export function Home() {
 						<p className="text-sm text-muted-foreground">{p.description}</p>
 						<div className="mt-1 flex flex-wrap gap-1.5">
 							<Badge>/{p.name}</Badge>
-							<Badge>updated {new Date(p.updated).toLocaleString()}</Badge>
+							<Badge>
+								updated <Time at={p.updated} />
+							</Badge>
 							{p.waiting > 0 && <Badge variant="ask">❓ {p.waiting} waiting</Badge>}
 							{p.notes > 0 && <Badge>💬 {p.notes}</Badge>}
 						</div>

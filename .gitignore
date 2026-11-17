@@ -3,10 +3,4 @@ node_modules/
 .review-cache/
 *.bak-*
 .DS_Store
-# project-specific, kept local
-LOCAL.md
-PLAN.md
-koo-motion-map.md
-convert_h3.py
-review-next-demo/
 examples/*/feedback.json

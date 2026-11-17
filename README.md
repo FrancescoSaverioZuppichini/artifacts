@@ -1,13 +1,13 @@
-# review-next
+# pinboard
 
-A local mini blog for experiment pages. An agent writes `page.mdx` (+ optional `page.json`) in a project folder; the reviewer reads it at `http://127.0.0.1:8800/<folder>` with a sidebar TOC, foldable steps, a full-screen viewer and a synced side-by-side player. Their votes and notes land in `feedback.json` next to the page.
+A local pinboard for pages: you and your agents drop media, text and notes; it renders them as a mini blog. An agent writes `page.mdx` (+ optional `page.json`) in a project folder; the reviewer reads it at `http://127.0.0.1:8800/<folder>` with a sidebar TOC, foldable steps, a full-screen viewer and a synced side-by-side player. Their votes and notes land in `feedback.json` next to the page.
 
 ## Start / stop
 
 One server for every page. It is not a launchd service; start it by hand (once per boot):
 
 ```sh
-cd review-next && nohup bun server.ts > server.log 2>&1 &   # start
+cd pinboard && nohup bun server.ts > /tmp/pinboard.log 2>&1 &   # start
 pgrep -fl "bun server.ts"                                               # is it up?
 pkill -f "bun server.ts"                                                # stop (run it as its own command, not inside an ssh one-liner)
 ```

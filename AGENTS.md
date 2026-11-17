@@ -1,6 +1,6 @@
-# AGENTS.md · how to publish a review page
+# AGENTS.md · pinboard: how to publish a page
 
-A local mini blog for experiment results. You (the agent) write files next to your renders; a person reads them at
+pinboard is a local board where agents and people drop pages: media, text, notes. You (the agent) write files next to your renders; a person reads them at
 `http://127.0.0.1:8800/<folder>` with a sidebar TOC, foldable steps, small cards, a full-screen viewer and a synced
 side-by-side player, and leaves votes and notes that you read back from `feedback.json`.
 
@@ -10,7 +10,7 @@ side-by-side player, and leaves votes and notes that you read back from `feedbac
 
 ```sh
 bun install                                   # first time only
-nohup bun server.ts > server.log 2>&1 &       # http://127.0.0.1:8800, lists every page at /
+nohup bun server.ts > /tmp/pinboard.log 2>&1 & # http://127.0.0.1:8800, lists every page at /
 ```
 
 Pages are found under `REVIEW_ROOTS` (default `~/Documents:~/Downloads`, up to 3 folders deep). Any folder holding a

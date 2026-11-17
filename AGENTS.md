@@ -11,9 +11,9 @@ server.ts          Bun server: discovery, MDX compile, media probes, thumbnails,
 app.tsx            client entry: one page, or the list of pages
 shell/             around the content: layout + polling (page.tsx), sidebar + links (toc.tsx), viewer.tsx,
                    side-by-side.tsx, the shared video clock (player.tsx), text comments (comments.tsx, anchor.ts),
-                   the one note look (comment.tsx), feedback store and URLs (state.ts)
+                   the one note look (comment.tsx), dates (time.tsx), the zustand store and URLs (state.ts)
 components/        what a page can use, one per file, registered in components/index.ts
-components/ui/     shadcn/ui primitives (Badge, Button, Card, Collapsible, Dialog, Popover, ScrollArea, Textarea)
+components/ui/     shadcn/ui primitives (Badge, Button, Card, Dialog, Popover, Textarea)
 lib/utils.ts       cn(), shadcn's class merger; nothing else goes here
 types.ts           the page.json schema and the feedback entry
 examples/studio-renders/  the reference page (every component once): one sphere lit four ways, made by make.py
@@ -25,8 +25,8 @@ examples/ascii/           a short blog post: ASCII art rendered to video, made b
 - **Discovery.** A page is any folder up to 3 levels under `ARTIFACTS_ROOTS` (default `~/Documents:~/Downloads`) that
   holds `page.mdx`; its URL is the folder name. Dot folders and `node_modules` are skipped. Rescanned every 10 s, and at
   once for an unknown name.
-- **Compile.** `page.mdx` is compiled on the server once per change. Frontmatter (`title`, `description`, `order`) is read
-  separately. On a compile error the last good version stays and the error (line:column) goes to a red banner and `/api/check`.
+- **Compile.** `page.mdx` is compiled on the server once per change. Frontmatter (`title`, `description`, `order`) is
+  YAML: quote a value that holds `: `. On a compile error the last good version stays and the error (line:column) goes to a red banner and `/api/check`.
 - **Data.** `GET /api/page/<name>` returns the compiled MDX, `page.json`, the frontmatter, `feedback.json`, and a probe
   (size, duration, codec, or `null` when missing) for every file the page points at: each `src`/`compare` in `page.json`
   and each literal `src=`/`compare=` attribute in the MDX.
@@ -181,8 +181,8 @@ The same names work as MDX tags and as `page.json` block types.
 3. Restart the server.
 
 Props come from the MDX attributes or the `page.json` block (every key but `type`). For page state import from
-`shell/state.ts`: `PageCtx` (media probes, open the viewer), `SectionCtx` (the enclosing section), `fileUrl(src)`,
-`useReview(id)` / `edit(id, …)`. Build it from the shadcn primitives in `components/ui/` and Tailwind; add `not-prose`
+`shell/state.ts`: `useStore` (`useStore((s) => s.media[src])` for a probe, `useStore.setState({ viewing: id })` opens the
+viewer), `SectionCtx` (the enclosing section), `fileUrl(src)`, `useReview(id)` / `edit(id, …)`. Build it from the shadcn primitives in `components/ui/` and Tailwind; add `not-prose`
 so the article typography leaves it alone.
 
 ```tsx

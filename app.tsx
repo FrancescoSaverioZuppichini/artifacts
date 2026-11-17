@@ -10,10 +10,12 @@ document.addEventListener("play", (e) => {
 	const group = (e.target as HTMLElement).closest("dialog");
 	document.querySelectorAll("video").forEach((v) => { if (v !== e.target && !v.paused && !group?.contains(v)) v.pause(); });
 }, true);
-// [Agent] Selecting text to copy it out of a folded block must not collapse the block.
+// [Agent] The click that ends a drag-selection must not open a card, fold a section or fold a code block: the reader wanted the text
+// (to copy it or to comment on it).
 document.addEventListener("click", (e) => {
-	const pre = (e.target as HTMLElement).closest<HTMLElement>(".prose pre, pre.fold, .fold-wrap pre");
-	if (pre && getSelection()?.isCollapsed) pre.classList.toggle("open");
-});
+	const sel = getSelection();
+	if (sel && !sel.isCollapsed && sel.containsNode(e.target as Node, true)) { e.stopPropagation(); e.preventDefault(); }
+}, true);
+document.addEventListener("click", (e) => (e.target as HTMLElement).closest(".prose pre, pre.fold, .fold-wrap pre")?.classList.toggle("open"));
 
 createRoot(document.getElementById("root")!).render(page ? <Page /> : <Home />);

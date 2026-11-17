@@ -1,11 +1,13 @@
 # AGENTS.md · artifacts
 
 artifacts renders folders of media and text as pages: a sidebar of contents, foldable sections, small cards, a full-screen
-viewer with a compare wipe, a synced side-by-side player, and 👍/👎 plus notes that land in `feedback.json`.
+viewer with a compare wipe, a synced side-by-side player, and 👍/👎, notes and comments on selected text that land in
+`feedback.json`.
 **Publishing a page means writing files.** No build step, no restart, no thumbnails to make.
 
 - [How it works](#how-it-works)
 - [Publish a page](#publish-a-page)
+- [Comments on text](#comments-on-text)
 - [Components](#components)
 - [Write a custom component](#write-a-custom-component)
 - [Rules for agents](#rules-for-agents)
@@ -18,7 +20,8 @@ viewer with a compare wipe, a synced side-by-side player, and 👍/👎 plus not
 server.ts          Bun server: page discovery, MDX compile, media probes, thumbnails, Range video, feedback, /api/check
 app.tsx            client entry: picks the page or the list of pages
 shell/             the page around the content: layout + polling (page.tsx), contents (toc.tsx), viewer.tsx,
-                   side-by-side.tsx, the shared video clock (player.tsx), feedback store and URLs (state.ts)
+                   side-by-side.tsx, the shared video clock (player.tsx), comments on selected text (comments.tsx),
+                   feedback store and URLs (state.ts)
 components/        everything a page can use, one component per file, registered in components/index.ts
 types.ts           the page.json schema and the feedback entry
 examples/hello/    a page that uses every component
@@ -50,8 +53,8 @@ and in side by side, served by `/f/<page>?src=` with Range support.
 (`open`, plus the two newest dated ones); after that the reader's folding is never touched.
 
 **Feedback.** A vote or a note is saved 300 ms after the last keystroke with `POST /api/feedback`; the server rereads
-`feedback.json`, merges the one entry and writes it atomically (tmp + rename). Notes being typed win over a poll. The
-file is keyed by card, section or note id:
+`feedback.json`, merges the one entry and writes it atomically (tmp + rename); a POST with `"delete": true` removes the
+entry instead. Notes being typed win over a poll. The file is keyed by card, section, note or [comment](#comments-on-text) id:
 
 ```json
 { "h-a":    { "vote": "up", "note": "keep this one", "updatedAt": "2026-11-17T10:02:11.481Z", "kind": "media",
@@ -68,7 +71,7 @@ because only the id matters.
 my-run/
   page.mdx        the article: frontmatter, prose, components (written by hand, once)
   page.json       generated sections (scripts rewrite it, only when its content changes)
-  feedback.json   written by the app: votes and notes (never write it)
+  feedback.json   written by the app: votes, notes and text comments (never write it)
   in/ out/ …      your files; every src is relative to the page folder and may use ../ (never outside the roots)
 ```
 
@@ -131,7 +134,7 @@ curl -s 127.0.0.1:8800/api/check/my-run
 **Read the feedback** after every round:
 
 ```sh
-jq -r 'to_entries[] | "[\(.value.section // .key)] \(.value.title) | \(.value.vote // "-") | \(.value.note)"' my-run/feedback.json
+jq -r 'to_entries[] | "[\(.value.section // .key)] \(.value.title // .value.quote) | \(.value.vote // "-") | \(.value.note)"' my-run/feedback.json
 jq -r --arg t "2026-11-17T09:00" 'to_entries[] | select(.value.updatedAt > $t) | "\(.key): \(.value.note)"' my-run/feedback.json
 ```
 
@@ -141,13 +144,41 @@ several cards · `?section=<id>` works like `#<id>` · `/` lists every page with
 **Keys:** viewer: ←/→ every card on the page, Ctrl/⌘+Enter saves the note and moves on, Esc closes. Side by side (the
 ▶ button on a section with 2+ videos): one clock for all columns, untick columns, pick the sound, ←/→ one frame, space plays.
 
+## Comments on text
+
+A reader selects any text in a section (prose, a `Code` block, a card caption, a section title), clicks the
+**💬 Comment** button that appears next to it, writes, and saves. The text gets a yellow highlight; hovering it shows the
+comment, clicking pins it, and the comment can be edited, resolved or deleted there. Resolved comments stay in the file
+but leave the page. The contents and the section header count them in 💬 with the notes.
+
+Each comment is one more entry in the same `feedback.json`, saved the same way, under a `c-<random>` id:
+
+```json
+"c-lh8lbx": { "kind": "comment", "quote": "hand-written MDX", "prefix": " page is builtThis section is ",
+              "suffix": ": Markdown plus components. Th", "section": "intro", "sectionTitle": "How this page is built",
+              "note": "Say which file this lives in.", "resolved": false, "updatedAt": "2026-11-17T12:22:43.761Z" }
+```
+
+`quote` is the selected text; `prefix` and `suffix` are up to 30 characters around it, taken from the section's text with
+no separators between elements. They are the anchor: on every render the quote is looked up word for word inside its
+section, and when it occurs more than once the occurrence whose surroundings match best wins. So a comment survives page
+re-renders and edits around it. If the quote itself is gone (reworded or removed), the comment shows as **detached**
+above the section's note box, never lost. Read the open ones after every round:
+
+```sh
+jq -r 'to_entries[] | select(.value.kind == "comment" and (.value.resolved | not)) | "[\(.value.section)] “\(.value.quote)” | \(.value.note)"' my-run/feedback.json
+```
+
+Rewording a commented sentence detaches its comment, so when you act on a comment say so in your reply; the reader
+resolves it.
+
 ## Components
 
 All in `components/`, registered in `components/index.ts`. The same names work as MDX tags and as `page.json` block types.
 
 | Component | Props (* required) | What it renders |
 |---|---|---|
-| `Section` | `id`*, `title`*, `date`, `badges`, `open`, `blocks`, children | A foldable chapter: listed in the contents, a note box at the end, a side-by-side button when it holds 2+ videos. `blocks` render before children. |
+| `Section` | `id`*, `title`*, `date`, `badges`, `open`, `blocks`, children | A foldable chapter: listed in the contents, a note box at the end (detached text comments show above it), a side-by-side button when it holds 2+ videos. `blocks` render before children. |
 | `Gallery` | `title`, `items` (list of `Media` props), children | A row of fixed-height cards. |
 | `Media` | `src`*, `id` (defaults to `src`), `title`, `caption`, `badges`, `compare` | An image or video card (by extension). Click opens the viewer; with `compare` (another card's id, or a path) the viewer opens with a wipe against it. |
 | `Code` | `src` or `text` or children, `title` | Verbatim text, folded to a few lines with a Copy button. `src` is re-read when the file changes. |
@@ -229,8 +260,8 @@ curl -s 127.0.0.1:8800/api/check/hello                  # ok:true, 0 errors (out
 
 Then open `http://127.0.0.1:8800/hello` in a browser (or headless Chrome) and click through: a card opens the viewer, a
 card with `compare` shows the wipe, a note saves to `examples/hello/feedback.json` (git-ignored), side by side plays in
-sync, the console has no errors. If you change how the example looks, retake `docs/screenshot.png` (1400 px wide,
-contents visible, one section open).
+sync, selecting text offers 💬 Comment and the highlight is still there after a reload, the console has no errors. If you
+change how the example looks, retake `docs/screenshot.png` (1400 px wide, contents visible, one section open).
 
 **Commits:** small [conventional commits](https://www.conventionalcommits.org) (`feat:`, `fix:`, `refactor:`, `docs:`,
 `chore:`; `!` for a breaking change to the page format), one concern each.
@@ -247,4 +278,5 @@ contents visible, one section open).
 | ⚠ codec chip on a card, warning in `/api/check` | The video is not H.264/VP9/AV1. Re-encode: `ffmpeg -i in.mov -c:v libx264 -pix_fmt yuv420p -c:a aac -movflags +faststart out.mp4`. |
 | ⏳ card never fills | The `src` path is wrong (relative to the page folder) or points outside the roots. `/api/check` lists it under `missing`. |
 | Old notes gone from a card | Its id changed. Feedback is keyed by id; restore the old id. |
+| A text comment shows as "detached" | Its quote is no longer in its section, word for word (the text was reworded, or moved to another section). It keeps its note; resolve or delete it. |
 | Client change not showing | The client is bundled at server start: restart the server. |

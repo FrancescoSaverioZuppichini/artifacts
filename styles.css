@@ -47,5 +47,8 @@ details.section[open] > summary .chev { transform: rotate(90deg); }
 .prose pre.open, pre.fold.open, .fold-wrap pre.open { max-height: none; mask-image: none; }
 pre.fold, .fold-wrap pre { @apply mt-1 rounded-md border bg-muted p-3 font-mono text-[12.5px] leading-relaxed; }
 
+::highlight(comment) { background-color: oklch(0.85 0.17 90 / 0.22); }
+::highlight(comment-active) { background-color: oklch(0.85 0.17 90 / 0.5); }
+
 .stage { container-type: size; }
 .hide-ov .overlay { display: none; }

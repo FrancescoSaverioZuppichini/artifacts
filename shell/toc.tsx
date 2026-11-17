@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Badge } from "../components/badge";
-import { hasNote, useVersion } from "./state";
+import { noteCount, useVersion } from "./state";
 
 type Entry = { id: string; date: string; title: string; badges: string[]; notes: number };
 const sections = () => [...document.querySelectorAll<HTMLDetailsElement>("details.section")];
@@ -21,7 +21,7 @@ export function Toc({ data, onPick }: { data: unknown; onPick: () => void }) {
 	useLayoutEffect(() => {
 		const next = sections().map((el) => ({
 			id: el.id, date: el.dataset.date!, title: el.dataset.title!, badges: JSON.parse(el.dataset.badges!),
-			notes: [el.id, ...[...el.querySelectorAll<HTMLElement>("[data-card]")].map((c) => c.dataset.card!)].filter(hasNote).length,
+			notes: noteCount(el.id, [el.id, ...[...el.querySelectorAll<HTMLElement>("[data-card]")].map((c) => c.dataset.card!)]),
 		}));
 		if (JSON.stringify(next) !== JSON.stringify(entries)) setEntries(next);
 	}, [data, v]);

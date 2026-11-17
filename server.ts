@@ -254,16 +254,17 @@ Bun.serve({
 		},
 		"/api/feedback": {
 			POST: async (request) => {
-				const { page, id, ...entry } = JSON.parse(await request.text());
+				const { page, id, delete: drop, ...entry } = JSON.parse(await request.text());
 				const dir = typeof page === "string" && pageDir(page);
 				if (!dir || typeof id !== "string" || !id) return missing("page or id");
 				// [Agent] Reread, merge and write in one synchronous step so overlapping saves cannot clobber each other; the rename means nobody
 				// reads half a file. Fields older versions wrote survive the spread.
 				const file = join(dir, "feedback.json"), all = readFeedback(dir);
-				all[id] = { ...all[id], ...entry, updatedAt: new Date().toISOString() };
+				if (drop) delete all[id];
+				else all[id] = { ...all[id], ...entry, updatedAt: new Date().toISOString() };
 				writeFileSync(`${file}.tmp`, JSON.stringify(all, null, 2) + "\n");
 				renameSync(`${file}.tmp`, file);
-				return Response.json(all[id]);
+				return Response.json(all[id] ?? null);
 			},
 		},
 	},

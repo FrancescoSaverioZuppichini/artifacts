@@ -1,5 +1,5 @@
 import { type ReactNode, useContext, useLayoutEffect, useRef, useState } from "react";
-import { hasNote, PageCtx, registry, SectionCtx, useVersion } from "../shell/state";
+import { noteCount, PageCtx, registry, SectionCtx, useVersion } from "../shell/state";
 import type { SectionProps } from "../types";
 import { Badges, tone } from "./badge";
 import { components } from "./index";
@@ -36,6 +36,7 @@ export function Section({ id, title, date, badges, open, blocks, children }: Sec
 					return Block ? <Block key={i} {...props} /> : <p key={i} className="text-red-300">Unknown block type “{type}”: register it in components/index.ts</p>;
 				})}
 				{children}
+				<div data-comments={id} />
 				<div className="mt-5"><Note id={id} placeholder="Note on this section…" /></div>
 			</div>
 		</details>
@@ -45,6 +46,6 @@ export function Section({ id, title, date, badges, open, blocks, children }: Sec
 // [Agent] Its own subscriber, so a keystroke in a note re-renders this chip and not every card of the section.
 function NoteCount({ id }: { id: string }) {
 	useVersion();
-	const n = [id, ...[...registry.values()].filter((x) => x.section === id).map((x) => x.id)].filter(hasNote).length;
+	const n = noteCount(id, [id, ...[...registry.values()].filter((x) => x.section === id).map((x) => x.id)]);
 	return n ? <span className="chip">💬 {n}</span> : null;
 }

@@ -2,6 +2,7 @@ import { Component, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef,
 import * as runtime from "react/jsx-runtime";
 import { components } from "../components";
 import type { Feedback, PageJson, Probe } from "../types";
+import { Comments } from "./comments";
 import { SideBySide } from "./side-by-side";
 import { cards, fail, load, page, PageCtx, params, picks, registry, review, type Show, status, store, stored, useVersion } from "./state";
 import { jump, Toc } from "./toc";
@@ -97,6 +98,7 @@ export function Page() {
 					<div className="prose prose-invert max-w-none prose-sm sm:prose-base prose-code:before:content-none prose-code:after:content-none">
 						<Guard key={data.code} data={data.data}>{Content && <Content components={components} data={data.data} />}</Guard>
 					</div>
+					<div data-comments="" />
 				</article>
 			</div>
 		</div>
@@ -106,6 +108,7 @@ export function Page() {
 			<div className="absolute top-0 right-0 flex h-full w-80 max-w-[85vw] flex-col border-l bg-background p-5 shadow-xl"><Toc data={data} onPick={() => setDrawer(false)} /></div>
 		</div>}
 		{viewing && registry.has(viewing) && <Viewer id={viewing} setId={setViewing} />}
+		<Comments />
 		{side && <SideBySide {...side} close={() => setSide(null)} />}
 	</PageCtx.Provider>;
 }

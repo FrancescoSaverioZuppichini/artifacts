@@ -26,7 +26,8 @@ examples/ascii/           a short blog post: ASCII art rendered to video, made b
   holds `page.mdx`; its URL is the folder name. Dot folders and `node_modules` are skipped. Rescanned every 10 s, and at
   once for an unknown name.
 - **Compile.** `page.mdx` is compiled on the server once per change. Frontmatter (`title`, `description`, `order`) is
-  YAML: quote a value that holds `: `. On a compile error the last good version stays and the error (line:column) goes to a red banner and `/api/check`.
+  YAML: quote a value that holds `: `. On a compile error the last good version stays and the error (line:column) goes
+  to a red banner and `/api/check`.
 - **Data.** `GET /api/page/<name>` returns the compiled MDX, `page.json`, the frontmatter, `feedback.json`, and a probe
   (size, duration, codec, or `null` when missing) for every file the page points at: each `src`/`compare` in `page.json`
   and each literal `src=`/`compare=` attribute in the MDX.
@@ -182,8 +183,8 @@ The same names work as MDX tags and as `page.json` block types.
 
 Props come from the MDX attributes or the `page.json` block (every key but `type`). For page state import from
 `shell/state.ts`: `useStore` (`useStore((s) => s.media[src])` for a probe, `useStore.setState({ viewing: id })` opens the
-viewer), `SectionCtx` (the enclosing section), `fileUrl(src)`, `useReview(id)` / `edit(id, …)`. Build it from the shadcn primitives in `components/ui/` and Tailwind; add `not-prose`
-so the article typography leaves it alone.
+viewer), `SectionCtx` (the enclosing section), `fileUrl(src)`, `useReview(id)` / `edit(id, …)`. Build it from the
+shadcn primitives in `components/ui/` and Tailwind; add `not-prose` so the article typography leaves it alone.
 
 ```tsx
 // components/metric.tsx

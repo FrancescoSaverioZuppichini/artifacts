@@ -9,11 +9,15 @@ with a compare wipe, a synced side-by-side player, and 👍/👎, notes and text
 ```
 server.ts          Bun server: discovery, MDX compile, media probes, thumbnails, Range video, feedback, /api/check
 app.tsx            client entry: one page, or the list of pages
-shell/             around the content: layout + polling (page.tsx), contents (toc.tsx), viewer.tsx, side-by-side.tsx,
-                   the shared video clock (player.tsx), text comments (comments.tsx), feedback store and URLs (state.ts)
+shell/             around the content: layout + polling (page.tsx), sidebar + links (toc.tsx), viewer.tsx,
+                   side-by-side.tsx, the shared video clock (player.tsx), text comments (comments.tsx, anchor.ts),
+                   the one note look (comment.tsx), feedback store and URLs (state.ts)
 components/        what a page can use, one per file, registered in components/index.ts
+components/ui/     shadcn/ui primitives (Badge, Button, Card, Collapsible, Dialog, Popover, ScrollArea, Textarea)
+lib/utils.ts       cn(), shadcn's class merger; nothing else goes here
 types.ts           the page.json schema and the feedback entry
-examples/hello/    a page that uses every component
+examples/studio-renders/  the reference page (every component once): one sphere lit four ways, made by make.py
+examples/ascii/           a short blog post: ASCII art rendered to video, made by make.py
 ```
 
 ## How it works
@@ -141,9 +145,13 @@ jq -r --arg t "2026-11-17T09:00" 'to_entries[] | select(.value.updatedAt > $t) |
 jq -r 'to_entries[] | select(.value.kind == "comment" and (.value.resolved | not)) | "[\(.value.section)] “\(.value.quote)” | \(.value.note)"' my-run/feedback.json
 ```
 
-**Text comments.** The reader selects text in a section (prose, a `Code` block, a caption, a title), clicks
-**💬 Comment** and saves. The text gets a yellow highlight; hover shows the comment, a click pins it for edit, resolve or
-delete. Resolved comments stay in the file but leave the page. 💬 counts in the contents and section header include them.
+**Text comments.** Selecting text in a section (prose, a `Code` block, a caption, a title) opens the comment form on it
+at once: type, then Save or Ctrl/⌘+Enter; Esc or a click outside closes it while it is empty. The text gets a yellow
+highlight; hover shows the comment, a click pins it for edit, resolve or delete. Resolved comments stay in the file but leave the page. 💬 counts in the contents and section header include them.
+
+**Section notes** (the box at the end of a section, kind `section`) show under the section title, as one line when the
+section is folded, and under its entry in the contents; a click opens the box. Card notes show on the card. Section
+notes, card notes and text comments share one look. Whitespace-only notes show nothing.
 
 `prefix` and `suffix` are up to 30 characters around the quote, from the section's text with no separators between
 elements. On every render the quote is looked up word for word in its section; if it occurs more than once, the best
@@ -156,7 +164,7 @@ The same names work as MDX tags and as `page.json` block types.
 
 | Component | Props (* required) | What it renders |
 |---|---|---|
-| `Section` | `id`*, `title`*, `date`, `badges`, `open`, `blocks`, children | A foldable chapter, listed in the contents, with a note box at the end (detached comments above it) and a side-by-side button when it holds 2+ videos. `blocks` render before children. |
+| `Section` | `id`*, `title`*, `date`, `badges`, `open`, `blocks`, children | A foldable chapter, listed in the contents, with a note box at the end (detached comments above it) and a side-by-side button when it holds 2+ videos. Its note shows under the title (one line when folded) and in the contents. `blocks` render before children. |
 | `Gallery` | `title`, `items` (list of `Media` props), children | A row of fixed-height cards. |
 | `Media` | `src`*, `id` (defaults to `src`), `title`, `caption`, `badges`, `compare` | An image or video card (by extension). Click opens the viewer; `compare` (another card's id, or a path) adds a wipe against it. |
 | `Code` | `src` or `text` or children, `title` | Verbatim text folded to a few lines, with Copy. `src` is re-read when the file changes. |
@@ -174,8 +182,8 @@ The same names work as MDX tags and as `page.json` block types.
 
 Props come from the MDX attributes or the `page.json` block (every key but `type`). For page state import from
 `shell/state.ts`: `PageCtx` (media probes, open the viewer), `SectionCtx` (the enclosing section), `fileUrl(src)`,
-`useReview(id)` / `edit(id, …)`. Style with Tailwind and the `styles.css` classes (`chip`, `badge`, `btn`, `label`); add
-`not-prose` so the article typography leaves it alone.
+`useReview(id)` / `edit(id, …)`. Build it from the shadcn primitives in `components/ui/` and Tailwind; add `not-prose`
+so the article typography leaves it alone.
 
 ```tsx
 // components/metric.tsx
@@ -199,13 +207,17 @@ when it is general and earns its place; otherwise compose the existing ones.
 
 ## Contribute
 
-**Run it:** `bun install`, then `bun server.ts`. Client code is bundled at start, so restart after any change outside the
-page folders; stop it with `pkill -f "bun server.ts"` as its own command.
+**Run it:** `bun install`, then `nohup bun server.ts > /tmp/artifacts.log 2>&1 &`. Client code is bundled at start, so
+restart after any change outside the page folders; stop it by PID (`pgrep -f "bun server.ts"`, then `kill <pid>`) as its
+own command.
 
 **Code rules:**
 
 - Page components live in `components/`, one per file, export named like the file, registered only in
-  `components/index.ts`. The shell (layout, contents, viewer, side by side) lives in `shell/`.
+  `components/index.ts`. The shell (layout, contents, viewer, side by side) lives in `shell/`. UI pieces come from the
+  shadcn/ui primitives in `components/ui/` (add one with its shadcn source, trimmed to what is used), not custom CSS.
+- Formatted by Biome (`bunx biome check --write .`); lines stay under ~110 characters, files small and read top to
+  bottom.
 - General only: nothing about one project. Project-specific shapes belong in a converter in that project.
 - No abstraction without a second use, no dead code, no defensive checks for things that cannot happen.
 - Comments only where the why is not obvious: one or two plain-English lines above the code, prefixed `[Agent]` when an
@@ -215,14 +227,16 @@ page folders; stop it with `pkill -f "bun server.ts"` as its own command.
 **Verify:**
 
 ```sh
-bunx -p typescript tsc --noEmit -p .
-curl -s 127.0.0.1:8800/api/check/hello      # ok:true, 0 errors (out/result-c.mp4 is missing on purpose)
+bunx -p typescript tsc --noEmit -p . && bunx biome check .
+curl -s 127.0.0.1:8800/api/check/studio-renders   # ok:true, 0 errors (out/upscale-2x.mp4 is missing on purpose)
+curl -s 127.0.0.1:8800/api/check/ascii            # ok:true, 0 errors, nothing missing
 ```
 
-Then click through `http://127.0.0.1:8800/hello` (a browser or headless Chrome): a card opens the viewer, `compare` shows
-the wipe, a note saves to `examples/hello/feedback.json` (git-ignored), side by side plays in sync, a text comment
-survives a reload, no console errors. If the example looks different, retake `docs/screenshot.png` (1400 px wide,
-contents visible, one section open).
+Then click through `http://127.0.0.1:8800/studio-renders` (a browser or headless Chrome): a card opens the viewer, `compare` shows
+the wipe, a note saves to `examples/studio-renders/feedback.json` (git-ignored), side by side plays in sync, a text comment
+survives a reload, a section note shows under its title and in the contents, no console errors. If the look changed,
+retake `docs/screenshot.png` from `/studio-renders` (1400 px wide, contents visible, one section open, one text comment and one
+section note showing), then delete the test notes.
 
 **Commits:** small [conventional commits](https://www.conventionalcommits.org) (`feat:`, `fix:`, `refactor:`, `docs:`,
 `chore:`; `!` for a breaking change to the page format), one concern each.

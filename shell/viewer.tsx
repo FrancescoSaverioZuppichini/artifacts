@@ -35,7 +35,7 @@ function Frame({ it }: { it: Entry }) {
 
 export function Viewer({ id, setId }: { id: string; setId: (id: string | null) => void }) {
 	const ids = cards(), i = ids.indexOf(id), it = registry.get(id)!;
-	const [hidden, setHidden] = useState(() => stored("pinboard.hide-overlays") === "1");
+	const [hidden, setHidden] = useState(() => stored("artifacts.hide-overlays") === "1");
 	const go = (d: number) => { flush(); setId(ids[Math.max(0, Math.min(ids.length - 1, i + d))]); };
 	const { close, ...modal } = useModal(() => { flush(); setId(null); });
 	useEffect(() => {
@@ -46,7 +46,7 @@ export function Viewer({ id, setId }: { id: string; setId: (id: string | null) =
 		addEventListener("keydown", key);
 		return () => removeEventListener("keydown", key);
 	}, [i]);
-	const hide = () => { setHidden(!hidden); store("pinboard.hide-overlays", hidden ? "0" : "1"); };
+	const hide = () => { setHidden(!hidden); store("artifacts.hide-overlays", hidden ? "0" : "1"); };
 	return <dialog {...modal} className={`m-0 h-dvh max-h-none w-screen max-w-none bg-background p-0 text-foreground open:flex open:flex-col${hidden ? " hide-ov" : ""}`}>
 		<div className="min-h-0 flex-1 bg-black"><Frame key={id} it={it} /></div>
 		<footer className="flex flex-wrap items-center gap-2 border-t px-4 py-2.5 text-sm">

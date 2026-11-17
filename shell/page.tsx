@@ -14,8 +14,8 @@ function Status({ data }: { data: PageData }) {
 	const v = useVersion(), [ids, setIds] = useState<string[]>([]);
 	useLayoutEffect(() => { const next = cards(); if (next.join("\n") !== ids.join("\n")) setIds(next); }, [data, v]);
 	const done = ids.filter((id) => review(id)?.vote || review(id)?.note?.trim()).length;
-	const [size, setSize] = useState(() => stored("pinboard.card-h") ?? "200px");
-	useEffect(() => { document.documentElement.style.setProperty("--card-h", size); store("pinboard.card-h", size); }, [size]);
+	const [size, setSize] = useState(() => stored("artifacts.card-h") ?? "200px");
+	useEffect(() => { document.documentElement.style.setProperty("--card-h", size); store("artifacts.card-h", size); }, [size]);
 	return <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
 		<span>{done} / {ids.length} reviewed</span><span>{status}</span>
 		<span className="ml-auto flex gap-1">{([["S", "140px"], ["M", "200px"], ["L", "300px"]] as const).map(([l, h]) => <button key={l} className="btn h-6 min-h-0 text-xs" aria-pressed={size === h} onClick={() => setSize(h)}>{l}</button>)}</span>

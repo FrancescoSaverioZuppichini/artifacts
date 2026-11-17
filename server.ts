@@ -9,7 +9,7 @@ import index from "./index.html";
 import type { Feedback, PageJson, Probe } from "./types";
 
 const PORT = Number(process.env.PORT ?? 8800);
-const ROOTS = (process.env.PINBOARD_ROOTS ?? `${homedir()}/Documents:${homedir()}/Downloads`).split(":");
+const ROOTS = (process.env.ARTIFACTS_ROOTS ?? `${homedir()}/Documents:${homedir()}/Downloads`).split(":");
 const MEDIA = /\.(png|jpe?g|webp|avif|gif|bmp|tiff?|mp4|webm|mov|m4v|mkv)$/i, VIDEO = /\.(mp4|webm|mov|m4v|mkv)$/i;
 
 const mtime = (file: string) => { try { return statSync(file).mtimeMs; } catch { return 0; } };

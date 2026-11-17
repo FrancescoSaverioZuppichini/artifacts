@@ -6,7 +6,7 @@ export function Home() {
 	const [list, setList] = useState<Listed[]>();
 	useEffect(() => { fetch("/api/pages").then((r) => r.json()).then(setList); }, []);
 	return <main className="mx-auto max-w-3xl p-6 pt-12">
-		<h1 className="text-3xl font-semibold tracking-tight">pinboard</h1>
+		<h1 className="text-3xl font-semibold tracking-tight">artifacts</h1>
 		<ul className="mt-6 divide-y">{list?.map((p) => <li key={p.name} className="py-4">
 			<a href={`/${encodeURIComponent(p.name)}`} className="text-lg font-medium hover:underline">{p.title}</a>
 			<p className="text-sm text-muted-foreground">{p.description}</p>

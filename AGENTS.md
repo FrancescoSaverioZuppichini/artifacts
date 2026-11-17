@@ -1,6 +1,6 @@
-# AGENTS.md · pinboard
+# AGENTS.md · artifacts
 
-pinboard renders folders of media and text as pages: a sidebar of contents, foldable sections, small cards, a full-screen
+artifacts renders folders of media and text as pages: a sidebar of contents, foldable sections, small cards, a full-screen
 viewer with a compare wipe, a synced side-by-side player, and 👍/👎 plus notes that land in `feedback.json`.
 **Publishing a page means writing files.** No build step, no restart, no thumbnails to make.
 
@@ -26,7 +26,7 @@ examples/hello/    a page that uses every component
 
 One request, start to finish:
 
-1. **Discovery.** Any folder up to 3 levels under `PINBOARD_ROOTS` (default `~/Documents:~/Downloads`) that holds a
+1. **Discovery.** Any folder up to 3 levels under `ARTIFACTS_ROOTS` (default `~/Documents:~/Downloads`) that holds a
    `page.mdx` is a page; its URL is the folder name (`/my-run`). Dot folders and `node_modules` are skipped. The scan is
    cached for 10 s and redone at once for an unknown name, so a new page needs no restart.
 2. **MDX compile.** `page.mdx` is compiled to a JS function body on the server, once per change of the file (mtime +
@@ -239,8 +239,8 @@ contents visible, one section open).
 
 | Symptom | Cause and fix |
 |---|---|
-| Page stuck on "Loading …" | The first request probes every file of the page with ffprobe (8 at a time), so a page with hundreds of new files takes a while once. `curl -s 127.0.0.1:8800/api/check/<page>` shows whether the server answers; look in `/tmp/pinboard.log`. |
-| "Page not found" | The folder is deeper than 3 levels, under a dot folder, outside `PINBOARD_ROOTS`, or shares its name with another page (the first one found wins). "Failed to fetch" means the server is down. |
+| Page stuck on "Loading …" | The first request probes every file of the page with ffprobe (8 at a time), so a page with hundreds of new files takes a while once. `curl -s 127.0.0.1:8800/api/check/<page>` shows whether the server answers; look in `/tmp/artifacts.log`. |
+| "Page not found" | The folder is deeper than 3 levels, under a dot folder, outside `ARTIFACTS_ROOTS`, or shares its name with another page (the first one found wins). "Failed to fetch" means the server is down. |
 | Red banner `page.mdx L:C …` | MDX compile error: a bare `<` or `{` in prose, an unclosed tag, or a broken `{…}` expression. Fix the line; the last good version shows meanwhile. |
 | Red banner "failed to render: Expected component `X` to be defined" | The tag `X` is not in `components/index.ts`. Any other "failed to render" message is a component that threw. |
 | "Unknown block type" inside a section | A `page.json` block's `type` is not a registered component name. |

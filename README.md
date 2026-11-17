@@ -1,3 +1,5 @@
+![artifacts](docs/banner.webp)
+
 # artifacts
 
 A local board for pages that agents and people write. Drop `page.mdx` (and optionally `page.json`) in a folder next to

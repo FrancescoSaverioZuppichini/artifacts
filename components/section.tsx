@@ -1,38 +1,16 @@
 import { ChevronRight } from "lucide-react"
-import { type ReactNode, useContext, useLayoutEffect, useRef, useState } from "react"
+import { type ReactNode, useLayoutEffect, useRef, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Comment } from "@/shell/comment"
-import {
-	countNotes,
-	PageCtx,
-	registry,
-	SectionCtx,
-	setOpen,
-	useOpen,
-	useReview,
-	useVersion,
-} from "@/shell/state"
+import { countNotes, registry, SectionCtx, setOpen, useReview, useStore } from "@/shell/state"
 import type { SectionProps } from "@/types"
-import { Badges, tone } from "./badge"
+import { Badges } from "./badge"
 import { components } from "./index"
 import { Note } from "./note"
 
-const chevron = "text-muted-foreground transition-transform group-data-[state=open]/section:rotate-90"
-
-// [Agent] Its own subscriber, so a keystroke in a note re-renders this chip and not every card of the
-// section.
-function NoteCount({ section }: { section: string }) {
-	useVersion()
-	const ids = [...registry.values()].filter((entry) => entry.section === section).map((entry) => entry.id)
-	const count = countNotes(section, [section, ...ids])
-	return count > 0 && <Badge>💬 {count}</Badge>
-}
-
-// [Agent] A foldable chapter. Folded content stays mounted (forceMount, hidden by CSS) so the contents, the
-// viewer, ←/→ and comment anchoring see every card. The contents is read from these data-* attributes, so
-// sections written by hand in the MDX are listed too.
+// [Agent] A foldable chapter. Folded content stays mounted (only hidden), so the contents, the viewer, ←/→
+// and comment anchoring see every card.
 export function Section({
 	id,
 	title,
@@ -42,26 +20,24 @@ export function Section({
 	blocks,
 	children,
 }: SectionProps & { children?: ReactNode }) {
-	const { sideBySide } = useContext(PageCtx)
-	const isOpen = useOpen(id)
+	const isOpen = useStore((s) => !!s.open[id])
+	const notes = useStore((s) => countNotes(s.feedback, id))
 	const note = useReview(id)?.note?.trim()
-	const ref = useRef<HTMLDivElement>(null)
-	const [videos, setVideos] = useState(0)
-	registry.set(id, { id, src: "", kind: "section", title })
+	const ref = useRef<HTMLElement>(null)
+	const [videos, setVideos] = useState<string[]>([])
+	registry.set(id, { id, kind: "section", title, date, badges, open })
 
-	useLayoutEffect(() => setVideos(ref.current!.querySelectorAll("[data-video]").length))
+	useLayoutEffect(() => {
+		const found = [...ref.current!.querySelectorAll<HTMLElement>("[data-card][data-video]")].map(
+			(el) => el.id,
+		)
+		if (found.join() !== videos.join()) setVideos(found)
+	})
 
-	function playAll(e: React.MouseEvent) {
-		e.stopPropagation()
-		const cards = ref.current!.querySelectorAll<HTMLElement>("[data-card][data-video]")
-		sideBySide({ ids: [...cards].map((card) => card.dataset.card!), title })
-	}
-
-	// [Agent] The note shown under the title is a preview; a click opens the section and its note box to edit
-	// it.
+	// [Agent] The note under the title is a preview; a click opens the section and focuses its note box.
 	function editNote(e: React.MouseEvent) {
 		e.stopPropagation()
-		setOpen(id, true)
+		setOpen([id], true)
 		requestAnimationFrame(() => {
 			const box = ref.current!.querySelector<HTMLElement>(`[data-note="${CSS.escape(id)}"]`)
 			box?.scrollIntoView({ block: "center" })
@@ -71,28 +47,22 @@ export function Section({
 
 	return (
 		<SectionCtx.Provider value={{ id, title }}>
-			<Collapsible
-				ref={ref}
-				id={id}
-				open={isOpen}
-				onOpenChange={(next) => setOpen(id, next)}
-				data-section=""
-				data-date={date ?? ""}
-				data-title={title}
-				data-badges={JSON.stringify(badges?.filter(tone) ?? [])}
-				data-open={open ? "" : undefined}
-				className="group/section scroll-mt-6 border-b py-3"
-			>
-				{/* [Agent] The whole header folds on click; the chevron is the keyboard-reachable trigger. */}
+			<section ref={ref} id={id} data-section="" className="scroll-mt-6 border-b py-3">
+				{/* [Agent] The whole header folds on click; the chevron is the keyboard-reachable toggle. */}
 				<div
 					className="not-prose flex cursor-pointer gap-2 rounded-md p-1 hover:bg-muted/50"
-					onClick={() => setOpen(id, !isOpen)}
+					onClick={() => setOpen([id], !isOpen)}
 				>
-					<CollapsibleTrigger asChild onClick={(e) => e.stopPropagation()}>
-						<Button variant="ghost" size="icon-xs" aria-label={isOpen ? "Fold" : "Unfold"}>
-							<ChevronRight className={chevron} />
-						</Button>
-					</CollapsibleTrigger>
+					<Button
+						variant="ghost"
+						size="icon-xs"
+						aria-expanded={isOpen}
+						aria-label={isOpen ? "Fold" : "Unfold"}
+					>
+						<ChevronRight
+							className={`text-muted-foreground transition-transform ${isOpen ? "rotate-90" : ""}`}
+						/>
+					</Button>
 					<div className="min-w-0 flex-1">
 						{date && <div className="text-xs text-muted-foreground">{date}</div>}
 						<div className="flex flex-wrap items-center gap-1.5">
@@ -101,19 +71,25 @@ export function Section({
 						</div>
 						<div className="mt-1 flex flex-wrap items-center gap-1 empty:hidden">
 							<Badges list={badges} status={false} />
-							{videos > 1 && (
-								<Button size="xs" onClick={playAll}>
-									▶ Side by side · {videos} videos
+							{videos.length > 1 && (
+								<Button
+									size="xs"
+									onClick={(e) => {
+										e.stopPropagation()
+										useStore.setState({ side: { ids: videos, title } })
+									}}
+								>
+									▶ Side by side · {videos.length} videos
 								</Button>
 							)}
-							<NoteCount section={id} />
+							{notes > 0 && <Badge>💬 {notes}</Badge>}
 						</div>
 						{note && <Comment text={note} line={!isOpen} className="mt-2 cursor-text" onClick={editNote} />}
 					</div>
 				</div>
-				<CollapsibleContent forceMount className="pl-8 data-[state=closed]:hidden">
+				<div hidden={!isOpen} className="pl-8">
 					{blocks?.map(({ type, ...props }, i) => {
-						const Block = components[type as keyof typeof components] as React.ComponentType<any>
+						const Block = components[type as keyof typeof components] as React.ComponentType<object>
 						if (Block) return <Block key={i} {...props} />
 						return (
 							<p key={i} className="text-red-300">
@@ -124,8 +100,8 @@ export function Section({
 					{children}
 					<div data-comments={id} />
 					<Note id={id} placeholder="Note on this section…" />
-				</CollapsibleContent>
-			</Collapsible>
+				</div>
+			</section>
 		</SectionCtx.Provider>
 	)
 }

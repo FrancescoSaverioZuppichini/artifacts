@@ -1,12 +1,13 @@
-import { Component, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useState } from "react"
 import * as runtime from "react/jsx-runtime"
+import { ErrorBoundary } from "react-error-boundary"
 import { components } from "@/components"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import type { Feedback, PageJson, Probe } from "@/types"
 import { Comments } from "./comments"
 import { SideBySide } from "./side-by-side"
-import { fail, load, PageCtx, page, params, picks, registry, type Show, savesDone, setOpen } from "./state"
+import { load, page, picks, registry, saves, setOpen, useStore } from "./state"
 import { jump, openAround, sections, Toc } from "./toc"
 import { Viewer } from "./viewer"
 
@@ -18,7 +19,6 @@ type PageData = {
 	data: PageJson
 	media: Record<string, Probe | null>
 	errors: string[]
-	feedback: Record<string, Feedback>
 }
 type Content = React.ComponentType<{ components: typeof components; data: PageJson }>
 
@@ -33,6 +33,7 @@ const prose = [
 	"prose-code:before:content-none prose-code:after:content-none",
 ].join(" ")
 const seen = new Set<string>()
+let first = true
 
 function Banner({ errors }: { errors: string[] }) {
 	return (
@@ -47,31 +48,18 @@ function Banner({ errors }: { errors: string[] }) {
 	)
 }
 
-// [Agent] A component that throws while rendering would blank the whole page; show the error instead and
-// retry on the next data.
-class Guard extends Component<{ children: ReactNode; data: unknown }, { error?: string }> {
-	state: { error?: string } = {}
-	static getDerivedStateFromError = (e: Error) => ({ error: e.message })
-	componentDidUpdate(prev: { data: unknown }) {
-		if (this.state.error && prev.data !== this.props.data) this.setState({ error: undefined })
-	}
-	render() {
-		if (!this.state.error) return this.props.children
-		return <Banner errors={[`page.mdx failed to render: ${this.state.error}`]} />
-	}
-}
-
-// [Agent] Sections are opened once, the first time they appear: those marked `open` and the newest two dated
-// ones (by page order; frontmatter `order: newest-first` flips it). After that the reader's folding is never
-// touched, even when page.json is rewritten.
+// [Agent] Sections open once, the first time they appear: those marked `open` and the newest two dated ones
+// (by page order; `order: newest-first` flips it). After that the reader's folding is never touched.
 function openNew(order: string) {
-	const all = sections()
-	const dated = all.filter((s) => s.dataset.date)
+	const all = sections().map((el) => registry.get(el.id)!)
+	const dated = all.filter((s) => s.date)
 	const newest = order === "newest-first" ? dated.slice(0, 2) : dated.slice(-2)
-	for (const s of all.filter((s) => !seen.has(s.id))) {
-		seen.add(s.id)
-		if (s.dataset.open !== undefined || newest.includes(s)) setOpen(s.id, true)
-	}
+	const fresh = all.filter((s) => !seen.has(s.id))
+	for (const s of fresh) seen.add(s.id)
+	setOpen(
+		fresh.filter((s) => s.open || newest.includes(s)).map((s) => s.id),
+		true,
+	)
 }
 
 function jumpToLink() {
@@ -79,41 +67,41 @@ function jumpToLink() {
 		const card = document.getElementById(id)
 		if (card) openAround(card)
 	}
-	const target = params.get("section") ?? decodeURIComponent(location.hash.slice(1))
-	const pick = [...picks].find((id) => document.getElementById(id))
-	if (target || pick) jump(target || pick!)
+	const target =
+		new URLSearchParams(location.search).get("section") ||
+		decodeURIComponent(location.hash.slice(1)) ||
+		[...picks].find((id) => document.getElementById(id))
+	if (target) jump(target)
 }
 
 export function Page() {
 	const [data, setData] = useState<PageData>()
 	const [error, setError] = useState<string>()
-	const [viewing, setViewing] = useState<string | null>(null)
-	const [side, setSide] = useState<Show | null>(null)
 	const [contents, setContents] = useState(false)
-	const first = useRef(true)
-	const Content = useMemo(
-		() => (data?.code ? (new Function(data.code)({ ...runtime }).default as Content) : null),
-		[data?.code],
-	)
+	const Content = useMemo(() => data && (new Function(data.code)(runtime).default as Content), [data?.code])
 
-	// [Agent] One request every 5 s; the server answers 304 unless page.mdx, page.json, a media file or
-	// feedback.json changed. Hidden tabs skip.
+	// [Agent] The server sends an ETag with no-cache, so the browser revalidates every poll and the server
+	// answers an empty 304 unless something changed; the same ETag means nothing to do. Hidden tabs skip.
 	useEffect(() => {
-		let etag = ""
+		let etag: string | null = null
+		let shown = ""
 		const poll = async () => {
 			if (document.hidden && etag) return
 			try {
-				const saves = savesDone()
-				const headers: HeadersInit = etag ? { "If-None-Match": etag } : {}
-				const res = await fetch(`/api/page/${encodeURIComponent(page)}`, { headers })
-				if (res.status === 304) return
+				const savesAtSend = saves
+				const res = await fetch(`/api/page/${encodeURIComponent(page)}`)
 				if (!res.ok) throw Error((await res.json()).error)
-				const next: PageData = await res.json()
-				if (!load(next.feedback, saves)) return
-				etag = res.headers.get("etag") ?? ""
+				if (res.headers.get("etag") === etag) return
+				const { feedback, ...next }: PageData & { feedback: Record<string, Feedback> } = await res.json()
+				if (!load(feedback, savesAtSend)) return
+				etag = res.headers.get("etag")
+				// [Agent] A note saved anywhere changes the payload; re-render the page only if the page itself did.
+				if (JSON.stringify(next) === shown) return
+				shown = JSON.stringify(next)
+				useStore.setState({ media: next.media })
 				setData(next)
 			} catch (e) {
-				fail((e as Error).message)
+				useStore.setState({ status: (e as Error).message })
 				setError((e as Error).message)
 			}
 		}
@@ -131,15 +119,14 @@ export function Page() {
 
 	useLayoutEffect(() => {
 		if (!data) return
-		openNew(data.order)
-		if (!first.current) return
-		first.current = false
 		document.title = data.title
-		jumpToLink()
+		openNew(data.order)
+		if (first) jumpToLink()
+		first = false
 	}, [data])
 
 	// [Agent] A wrong page name must say so, not spin: the poll's 404 lands here before any data exists.
-	if (!data) {
+	if (!data || !Content) {
 		return (
 			<p className="p-8 text-muted-foreground">
 				{error ? `Page “${page}” not found (${error}). ` : `Loading ${page}…`}
@@ -153,7 +140,7 @@ export function Page() {
 	}
 
 	return (
-		<PageCtx.Provider value={{ media: data.media, view: setViewing, sideBySide: setSide }}>
+		<>
 			<div className={layout}>
 				<aside className="sticky top-6 hidden h-[calc(100vh-3rem)] md:flex">
 					<Toc data={data} />
@@ -165,9 +152,15 @@ export function Page() {
 					</header>
 					{data.errors.length > 0 && <Banner errors={data.errors} />}
 					<div className={prose}>
-						<Guard key={data.code} data={data.data}>
-							{Content && <Content components={components} data={data.data} />}
-						</Guard>
+						{/* [Agent] A component that throws would blank the page; show the error, retry on new data. */}
+						<ErrorBoundary
+							resetKeys={[data]}
+							fallbackRender={({ error }) => (
+								<Banner errors={[`page.mdx failed to render: ${(error as Error).message}`]} />
+							)}
+						>
+							<Content components={components} data={data.data} />
+						</ErrorBoundary>
 					</div>
 					<div data-comments="" />
 				</article>
@@ -186,9 +179,9 @@ export function Page() {
 					<Toc data={data} onPick={() => setContents(false)} />
 				</DialogContent>
 			</Dialog>
-			{viewing && registry.has(viewing) && <Viewer id={viewing} setId={setViewing} />}
+			<Viewer />
 			<Comments />
-			{side && <SideBySide {...side} close={() => setSide(null)} />}
-		</PageCtx.Provider>
+			<SideBySide />
+		</>
 	)
 }

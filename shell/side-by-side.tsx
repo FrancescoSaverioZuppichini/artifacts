@@ -2,49 +2,44 @@ import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Controls, fullScreen, select } from "./player"
-import { type Entry, fileUrl, registry, type Show } from "./state"
+import { type Entry, fileUrl, registry, useStore } from "./state"
 
 const label = (item: Entry) => (item.title ?? item.id).slice(0, 40)
 
 // [Agent] Every video of one section in a full-screen row on one clock, so versions of the same clip can be
-// audited frame against frame. Unticking a column hides it; the sound pick decides the clock, while the
-// on-screen order stays the section's.
-export function SideBySide({ ids, title, close }: Show & { close: () => void }) {
-	const items = ids.map((id) => registry.get(id)!).filter(Boolean)
-	const [shown, setShown] = useState(() => new Set(ids))
+// audited frame against frame. Unticking hides a column; the sound pick decides the clock, while the on-screen
+// order stays the section's.
+function Row({ ids, title }: { ids: string[]; title: string }) {
+	const items = ids.map((id) => registry.get(id)!)
+	const [shown, setShown] = useState(ids)
 	const [voice, setVoice] = useState(ids[0])
 	const [videos, setVideos] = useState<HTMLVideoElement[]>([])
 	// [Agent] The dialog portal mounts its content a render late, so the row is kept in state, not a ref.
 	const [row, setRow] = useState<HTMLDivElement | null>(null)
-	const columns = items.filter((item) => shown.has(item.id))
+	const columns = items.filter((item) => shown.includes(item.id))
 
 	useEffect(() => {
-		if (!row) return
-		const all = [...row.querySelectorAll("video")]
-		const clock = Math.max(
-			0,
-			columns.findIndex((item) => item.id === voice),
-		)
-		setVideos([all[clock], ...all.filter((_, i) => i !== clock)])
+		const all = [...(row?.querySelectorAll("video") ?? [])]
+		const clock = all[columns.findIndex((item) => item.id === voice)] ?? all[0]
+		setVideos(clock ? [clock, ...all.filter((v) => v !== clock)] : [])
 	}, [row, shown, voice])
 
 	function tick(id: string) {
-		const next = new Set(shown)
-		if (!next.has(id)) next.add(id)
-		else if (next.size > 1) next.delete(id)
+		const next = shown.includes(id) ? shown.filter((other) => other !== id) : [...shown, id]
+		if (!next.length) return
 		setShown(next)
-		if (!next.has(voice)) setVoice([...next][0])
+		if (!next.includes(voice)) setVoice(next[0])
 	}
 
 	return (
-		<Dialog open onOpenChange={(open) => open || close()}>
+		<Dialog open onOpenChange={(open) => open || useStore.setState({ side: null })}>
 			<DialogContent onOpenAutoFocus={(e) => e.preventDefault()} className={`${fullScreen} bg-black`}>
 				<header className="flex flex-wrap items-center gap-3 bg-popover px-4 py-2 text-sm">
 					<DialogTitle className="max-w-[40ch] truncate text-sm">{title}</DialogTitle>
 					<span className="flex flex-wrap gap-3 text-muted-foreground">
 						{items.map((item) => (
 							<label key={item.id} className="cursor-pointer whitespace-nowrap" title={item.title}>
-								<input type="checkbox" checked={shown.has(item.id)} onChange={() => tick(item.id)} />{" "}
+								<input type="checkbox" checked={shown.includes(item.id)} onChange={() => tick(item.id)} />{" "}
 								{label(item)}
 							</label>
 						))}
@@ -59,7 +54,7 @@ export function SideBySide({ ids, title, close }: Show & { close: () => void }) 
 							))}
 						</select>
 					</label>
-					<Button className="ml-auto" onClick={close}>
+					<Button className="ml-auto" onClick={() => useStore.setState({ side: null })}>
 						Close (Esc)
 					</Button>
 				</header>
@@ -73,7 +68,8 @@ export function SideBySide({ ids, title, close }: Show & { close: () => void }) 
 								{item.title}
 							</figcaption>
 							<video
-								src={fileUrl(item.src)}
+								src={fileUrl(item.src!)}
+								loop
 								muted
 								playsInline
 								preload="auto"
@@ -86,4 +82,9 @@ export function SideBySide({ ids, title, close }: Show & { close: () => void }) 
 			</DialogContent>
 		</Dialog>
 	)
+}
+
+export function SideBySide() {
+	const side = useStore((s) => s.side)
+	return side && <Row {...side} />
 }

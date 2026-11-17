@@ -1,33 +1,25 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
-import { Badge } from "@/components/badge"
-import { Badge as Chip } from "@/components/ui/badge"
+import { useEffect, useLayoutEffect, useState } from "react"
+import { Badges } from "@/components/badge"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import { Comment } from "./comment"
-import { cards, countNotes, review, setOpen, status, useVersion } from "./state"
+import { cards, countNotes, registry, setOpen, useStore } from "./state"
 
 const SIZES = { S: "140px", M: "200px", L: "300px" }
-
-// [Agent] Storage throws in some private windows; a lost preference is fine, a crashed page is not.
-function stored(key: string, value?: string) {
-	try {
-		if (value === undefined) return localStorage.getItem(key)
-		localStorage.setItem(key, value)
-	} catch {}
-	return null
-}
 
 export const sections = () => [...document.querySelectorAll<HTMLElement>("[data-section]")]
 
 export function openAround(el: Element) {
+	const around = []
 	for (let s = el.closest("[data-section]"); s; s = s.parentElement?.closest("[data-section]") ?? null) {
-		setOpen(s.id, true)
+		around.push(s.id)
 	}
+	setOpen(around, true)
 }
 
-// [Agent] A link target can be a section or a card: open every section around it, ring a card, and scroll
-// once React has shown the opened content (a folded section has no layout to scroll to).
+// [Agent] A link target can be a section or a card: open every section around it, ring a card, and scroll once
+// React has shown the opened content (a folded section has no layout to scroll to).
 export function jump(id: string) {
 	const el = document.getElementById(id)
 	if (!el) return
@@ -37,60 +29,39 @@ export function jump(id: string) {
 	requestAnimationFrame(() => el.scrollIntoView({ block: el.dataset.card ? "center" : "start" }))
 }
 
-// [Agent] Read from the rendered sections, not from page.json, so sections written by hand in the MDX are
-// listed too.
-function listItems() {
-	return sections().map((el) => {
-		const cards = [...el.querySelectorAll<HTMLElement>("[data-card]")].map((card) => card.dataset.card!)
-		return {
-			id: el.id,
-			date: el.dataset.date!,
-			title: el.dataset.title!,
-			badges: JSON.parse(el.dataset.badges!) as string[],
-			note: review(el.id)?.note?.trim() ?? "",
-			notes: countNotes(el.id, [el.id, ...cards]),
-		}
-	})
-}
-
-// [Agent] Scroll-spy: the active entry is the last section whose top has passed the edge, or the last one
-// when the page is scrolled to the bottom.
+// [Agent] Scroll-spy: the last section whose top has passed the edge, or the last one at the very bottom.
 function getActive(ids: string[]) {
-	const tops = ids.map((id) => ({
-		id,
-		top: document.getElementById(id)?.getBoundingClientRect().top ?? Infinity,
-	}))
 	const atBottom = document.documentElement.scrollHeight - scrollY - innerHeight < 2
-	const passed = atBottom ? tops.at(-1) : tops.filter((t) => t.top <= 80).at(-1)
-	return passed?.id ?? tops[0]?.id ?? ""
+	const passed = ids.filter((id) => (document.getElementById(id)?.getBoundingClientRect().top ?? 0) <= 80)
+	return (atBottom ? ids.at(-1) : passed.at(-1)) ?? ids[0]
 }
 
-// [Agent] The sidebar: review progress, the S/M/L card size, and the contents.
+// [Agent] The sidebar: review progress, the S/M/L card size, and the contents. Sections and cards are read from
+// the rendered page, not page.json, so the ones written by hand in the MDX count too.
 export function Toc({ data, onPick }: { data: unknown; onPick?: () => void }) {
-	const version = useVersion()
-	const [items, setItems] = useState<ReturnType<typeof listItems>>([])
+	const feedback = useStore((s) => s.feedback)
+	const status = useStore((s) => s.status)
 	const [ids, setIds] = useState<string[]>([])
-	const [active, setActive] = useState("")
-	const [size, setSize] = useState(() => stored("artifacts.card-h") ?? SIZES.M)
-	const list = useRef<HTMLUListElement>(null)
-	const reviewed = ids.filter((id) => review(id)?.vote || review(id)?.note?.trim()).length
+	const [cardIds, setCardIds] = useState<string[]>([])
+	const [active, setActive] = useState<string>()
+	const [size, setSize] = useState(() => localStorage.getItem("artifacts.card-h") ?? SIZES.M)
+	const reviewed = cardIds.filter((id) => feedback[id]?.vote || feedback[id]?.note?.trim()).length
 
 	useLayoutEffect(() => {
-		const next = listItems()
-		if (JSON.stringify(next) !== JSON.stringify(items)) setItems(next)
-		if (cards().join() !== ids.join()) setIds(cards())
-	}, [data, version])
+		setIds(sections().map((el) => el.id))
+		setCardIds(cards())
+	}, [data])
 
 	useEffect(() => {
 		document.documentElement.style.setProperty("--card-h", size)
-		stored("artifacts.card-h", size)
+		localStorage.setItem("artifacts.card-h", size)
 	}, [size])
 
 	useEffect(() => {
 		let frame = 0
 		const spy = () => {
 			cancelAnimationFrame(frame)
-			frame = requestAnimationFrame(() => setActive(getActive(items.map((item) => item.id))))
+			frame = requestAnimationFrame(() => setActive(getActive(ids)))
 		}
 		addEventListener("scroll", spy, { passive: true })
 		addEventListener("resize", spy)
@@ -99,10 +70,10 @@ export function Toc({ data, onPick }: { data: unknown; onPick?: () => void }) {
 			removeEventListener("scroll", spy)
 			removeEventListener("resize", spy)
 		}
-	}, [items])
+	}, [ids])
 
 	useEffect(() => {
-		list.current?.querySelector(`[data-toc="${CSS.escape(active)}"]`)?.scrollIntoView({ block: "nearest" })
+		document.querySelector(`[data-toc="${CSS.escape(active ?? "")}"]`)?.scrollIntoView({ block: "nearest" })
 	}, [active])
 
 	return (
@@ -111,7 +82,7 @@ export function Toc({ data, onPick }: { data: unknown; onPick?: () => void }) {
 				← all pages
 			</a>
 			<div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-				{reviewed} / {ids.length} reviewed <span>{status}</span>
+				{reviewed} / {cardIds.length} reviewed <span>{status}</span>
 				<span className="ml-auto flex gap-1">
 					{Object.entries(SIZES).map(([label, height]) => (
 						<Button
@@ -128,50 +99,47 @@ export function Toc({ data, onPick }: { data: unknown; onPick?: () => void }) {
 			</div>
 			<div className="-mb-2 flex items-center gap-1.5">
 				<span className="font-medium">Contents</span>
-				<Button size="xs" className="ml-auto" onClick={() => sections().forEach((s) => setOpen(s.id, true))}>
+				<Button size="xs" className="ml-auto" onClick={() => setOpen(ids, true)}>
 					Expand all
 				</Button>
-				<Button size="xs" onClick={() => sections().forEach((s) => setOpen(s.id, false))}>
+				<Button size="xs" onClick={() => setOpen(ids, false)}>
 					Collapse all
 				</Button>
 			</div>
-			{/* [Agent] Radix wraps the list in a display:table div that grows with its widest line; block keeps
-			    the notes truncated to the sidebar width. */}
-			<ScrollArea className="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]>div]:block!">
-				<ul ref={list} className="space-y-0.5 p-1 pr-3">
-					{items.map((item) => (
-						<li key={item.id}>
+			<ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-1 pr-3 [scrollbar-width:thin]">
+				{ids.map((id) => {
+					const { date, title, badges } = registry.get(id) ?? {}
+					const note = feedback[id]?.note?.trim()
+					const notes = countNotes(feedback, id)
+					return (
+						<li key={id}>
 							<a
-								href={`#${item.id}`}
-								data-toc={item.id}
-								aria-current={active === item.id ? "location" : undefined}
+								href={`#${id}`}
+								data-toc={id}
+								aria-current={active === id ? "location" : undefined}
 								onClick={(e) => {
 									e.preventDefault()
-									jump(item.id)
+									jump(id)
 									onPick?.()
 								}}
 								className={cn(
 									"block rounded-md px-2 py-1 leading-snug text-muted-foreground transition-colors",
 									"hover:bg-muted hover:text-foreground",
-									active === item.id && "bg-muted text-foreground",
+									"aria-[current=location]:bg-muted aria-[current=location]:text-foreground",
 								)}
 							>
-								{item.date && <span className="block text-[11px] opacity-70">{item.date}</span>}
-								<span className="line-clamp-2">{item.title}</span>
-								{(item.badges.length > 0 || item.notes > 0) && (
-									<span className="mt-0.5 flex flex-wrap gap-1">
-										{item.badges.map((text) => (
-											<Badge key={text}>{text}</Badge>
-										))}
-										{item.notes > 0 && <Chip>💬 {item.notes}</Chip>}
-									</span>
-								)}
-								{item.note && <Comment text={item.note} line className="mt-1 py-0.5 text-xs" />}
+								{date && <span className="block text-[11px] opacity-70">{date}</span>}
+								<span className="line-clamp-2">{title}</span>
+								<span className="mt-0.5 flex flex-wrap gap-1 empty:hidden">
+									<Badges list={badges} status />
+									{notes > 0 && <Badge>💬 {notes}</Badge>}
+								</span>
+								{note && <Comment text={note} line className="mt-1 py-0.5 text-xs" />}
 							</a>
 						</li>
-					))}
-				</ul>
-			</ScrollArea>
+					)
+				})}
+			</ul>
 		</nav>
 	)
 }

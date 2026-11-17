@@ -9,28 +9,27 @@ export const fullScreen = [
 	"inset-0 flex h-dvh w-screen max-w-none flex-col gap-0 rounded-none border-0 p-0",
 	"translate-x-0 translate-y-0 sm:max-w-none",
 ].join(" ")
-export const select = buttonVariants({ variant: "outline", size: "sm" })
+export const select = buttonVariants({ size: "sm" })
 
-// [Agent] The first video is the clock: the others are snapped to it whenever they drift, and all restart at
-// the shortest duration so columns stay frame-aligned across loops. Only the clock ever gets sound, so the
-// same track never plays twice out of sync.
+// [Agent] The first video is the clock: the others snap to it whenever they drift, and all restart at the
+// shortest duration so columns stay frame-aligned across loops. Only the clock ever gets sound, so the same
+// track never plays twice out of sync.
 export function Controls({ videos, keys }: { videos: HTMLVideoElement[]; keys?: boolean }) {
 	const [playing, setPlaying] = useState(false)
 	const [muted, setMuted] = useState(true)
 	const seek = useRef<HTMLInputElement>(null)
 	const clock = videos[0]
 	const duration = () => Math.min(...videos.map((v) => v.duration || Infinity))
-
-	function step(frames: number) {
-		const time = Math.max(0, clock.currentTime + frames / FPS)
-		for (const v of videos) {
-			v.pause()
-			v.currentTime = time
-		}
+	const seekTo = (time: number) => {
+		for (const v of videos) v.currentTime = time
 	}
 
-	// [Agent] Read paused once: after the clock's play() it is already false, and the followers would be paused
-	// instead of started.
+	function step(frames: number) {
+		for (const v of videos) v.pause()
+		seekTo(Math.max(0, clock.currentTime + frames / FPS))
+	}
+
+	// [Agent] Read paused once: after the clock's play() it is already false, and the others would be paused.
 	function toggle() {
 		const start = clock.paused
 		for (const v of videos) start ? v.play().catch(() => {}) : v.pause()
@@ -44,11 +43,9 @@ export function Controls({ videos, keys }: { videos: HTMLVideoElement[]; keys?: 
 			if (seek.current) seek.current.value = String((clock.currentTime / duration()) * 1000)
 		}
 		const tick = () => {
-			if (clock.currentTime >= duration() - 0.03) for (const v of videos) v.currentTime = 0
-			for (const v of videos) {
-				if (v !== clock && Math.abs(v.currentTime - clock.currentTime) > 0.08)
-					v.currentTime = clock.currentTime
-			}
+			if (clock.currentTime >= duration() - 0.03) seekTo(0)
+			for (const v of videos)
+				if (Math.abs(v.currentTime - clock.currentTime) > 0.08) v.currentTime = clock.currentTime
 			show()
 			frame = requestAnimationFrame(tick)
 		}
@@ -76,11 +73,10 @@ export function Controls({ videos, keys }: { videos: HTMLVideoElement[]; keys?: 
 	useEffect(() => {
 		if (!keys) return
 		const onKey = (e: KeyboardEvent) => {
-			if (typing(e)) return
-			if (e.key === "ArrowLeft" || e.key === "ArrowRight") step(e.key === "ArrowLeft" ? -1 : 1)
-			else if (e.key === " ") toggle()
-			else return
+			if (typing(e) || !["ArrowLeft", "ArrowRight", " "].includes(e.key)) return
 			e.preventDefault()
+			if (e.key === " ") toggle()
+			else step(e.key === "ArrowLeft" ? -1 : 1)
 		}
 		addEventListener("keydown", onKey)
 		return () => removeEventListener("keydown", onKey)
@@ -96,10 +92,7 @@ export function Controls({ videos, keys }: { videos: HTMLVideoElement[]; keys?: 
 				max={1000}
 				defaultValue={0}
 				className="min-w-0 flex-1"
-				onInput={(e) => {
-					const time = (Number(e.currentTarget.value) / 1000) * duration()
-					for (const v of videos) v.currentTime = time
-				}}
+				onInput={(e) => seekTo((Number(e.currentTarget.value) / 1000) * duration())}
 				onPointerUp={(e) => e.currentTarget.blur()}
 			/>
 			<select

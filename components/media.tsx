@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { Comment } from "@/shell/comment"
-import { PageCtx, picks, registry, SectionCtx, thumbUrl, useReview } from "@/shell/state"
+import { picks, registry, SectionCtx, thumbUrl, useReview, useStore } from "@/shell/state"
 import { Votes } from "@/shell/votes"
 import { type MediaProps, playable } from "@/types"
 import { Badges, tone } from "./badge"
@@ -20,10 +20,10 @@ const onThumb = "border-0 bg-black/70 text-foreground"
 // [Agent] A poster-only card: the grid never loads a video, it plays in the viewer. A file that is not there
 // yet is a ⏳ card that fills in by itself.
 export function Media(props: MediaProps) {
-	const { media, view } = useContext(PageCtx)
+	const { src, title, caption, badges, compare } = props
+	const id = props.id ?? src
 	const section = useContext(SectionCtx)
-	const id = props.id ?? props.src
-	const probe = media[props.src]
+	const probe = useStore((s) => s.media[src])
 	const note = useReview(id)?.note?.trim()
 	registry.set(id, { ...props, id, kind: "media", section: section?.id, sectionTitle: section?.title })
 
@@ -34,13 +34,13 @@ export function Media(props: MediaProps) {
 			data-video={probe?.video || undefined}
 			data-picked={picks.has(id) || undefined}
 			style={{ "--ar": probe?.w ? probe.w / probe.h : undefined } as CSSProperties}
-			onClick={() => view(id)}
+			onClick={() => useStore.setState({ viewing: id })}
 			className={card}
 		>
 			<div className="relative grid h-(--card-h) place-items-center bg-black">
 				{probe ? (
 					<img
-						src={thumbUrl(props.src, probe)}
+						src={thumbUrl(src, probe)}
 						loading="lazy"
 						decoding="async"
 						alt=""
@@ -50,15 +50,15 @@ export function Media(props: MediaProps) {
 					<span className="px-3 text-center text-sm text-muted-foreground">
 						⏳ not there yet
 						<br />
-						<span className="text-[11px] break-all">{props.src}</span>
+						<span className="text-[11px] break-all">{src}</span>
 					</span>
 				)}
 				<div className="absolute top-1.5 left-1.5 flex gap-1">
 					{probe?.video && (
 						<Badge className={onThumb}>▶ {probe.dur ? `${probe.dur.toFixed(1)} s` : ""}</Badge>
 					)}
-					{props.compare && (
-						<Badge className={onThumb} title={`compare: ${props.compare}`}>
+					{compare && (
+						<Badge className={onThumb} title={`compare: ${compare}`}>
 							⇆
 						</Badge>
 					)}
@@ -71,19 +71,19 @@ export function Media(props: MediaProps) {
 			</div>
 			<div className="flex flex-1 flex-col gap-1 p-2 text-[13px] leading-snug">
 				<div className="flex flex-wrap items-baseline gap-1">
-					<Badges list={props.badges} status />
-					<b className="line-clamp-2 font-medium" title={props.title}>
-						{props.title ?? props.src.split("/").pop()}
+					<Badges list={badges} status />
+					<b className="line-clamp-2 font-medium" title={title}>
+						{title ?? src.split("/").pop()}
 					</b>
 				</div>
-				{props.caption && (
-					<div className="line-clamp-2 text-muted-foreground" title={props.caption}>
-						{props.caption}
+				{caption && (
+					<div className="line-clamp-2 text-muted-foreground" title={caption}>
+						{caption}
 					</div>
 				)}
-				{props.badges?.some((text) => !tone(text)) && (
+				{badges?.some((text) => !tone(text)) && (
 					<div className="flex flex-wrap gap-1">
-						<Badges list={props.badges} status={false} />
+						<Badges list={badges} status={false} />
 					</div>
 				)}
 				<div className="mt-auto flex min-w-0 items-center gap-1 pt-1">

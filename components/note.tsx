@@ -10,7 +10,6 @@ export function Note({ id, placeholder = "Note…", onSubmit }: NoteProps) {
 	if (!registry.has(id)) {
 		registry.set(id, {
 			id,
-			src: "",
 			kind: "note",
 			section: section?.id,
 			sectionTitle: section?.title,

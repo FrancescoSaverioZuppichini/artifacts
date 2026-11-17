@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import type { Feedback } from "@/types"
-import { edit, flush, remove } from "./state"
+import { edit, flush } from "./state"
+import { Time } from "./time"
 
 // [Agent] The one look of a note: section notes, card notes and text comments. `line` folds it to one line.
 // data-cmt keeps it out of the text that comments anchor to, so showing a note never shifts an anchor.
@@ -34,19 +35,24 @@ type Props = {
 	id?: string
 	entry: Feedback
 	detached?: boolean
-	onSave: (note: string) => void
+	onCreate?: (note: string) => void
 	onClose?: () => void
 }
 
-// [Agent] One body for a new comment (no id yet: Save creates it) and a saved one (edit in place, resolve,
+// [Agent] One body for a new comment (no id yet: Save calls onCreate) and a saved one (edit in place, resolve,
 // delete). The frame around it is the caller's: a Popover on the page, a Card when detached.
-export function CommentCard({ id, entry, detached, onSave, onClose }: Props) {
+export function CommentCard({ id, entry, detached, onCreate, onClose }: Props) {
 	const [editing, setEditing] = useState(!entry.note)
 	const [text, setText] = useState(entry.note ?? "")
+	const change = (patch: Feedback | null) => {
+		edit(id!, patch)
+		flush()
+	}
 
 	function save() {
 		if (!text.trim()) return
-		onSave(text.trim())
+		if (id) change({ note: text.trim() })
+		else onCreate?.(text.trim())
 		setEditing(false)
 	}
 
@@ -78,16 +84,10 @@ export function CommentCard({ id, entry, detached, onSave, onClose }: Props) {
 				</Button>
 				{id && (
 					<>
-						<Button
-							size="xs"
-							onClick={() => {
-								edit(id, { resolved: true })
-								flush()
-							}}
-						>
+						<Button size="xs" onClick={() => change({ resolved: true })}>
 							✓ Resolve
 						</Button>
-						<Button size="xs" onClick={() => remove(id)}>
+						<Button size="xs" onClick={() => change(null)}>
 							Delete
 						</Button>
 					</>
@@ -99,7 +99,9 @@ export function CommentCard({ id, entry, detached, onSave, onClose }: Props) {
 				)}
 			</div>
 			{entry.updatedAt && (
-				<div className="text-[11px] text-muted-foreground">{new Date(entry.updatedAt).toLocaleString()}</div>
+				<span className="text-[11px] text-muted-foreground">
+					<Time at={entry.updatedAt} />
+				</span>
 			)}
 		</div>
 	)

@@ -1,81 +1,53 @@
 # AGENTS.md · artifacts
 
-artifacts renders folders of media and text as pages: a sidebar of contents, foldable sections, small cards, a full-screen
-viewer with a compare wipe, a synced side-by-side player, and 👍/👎, notes and comments on selected text that land in
-`feedback.json`.
+artifacts renders folders of media and text as pages: a contents sidebar, foldable sections, cards, a full-screen viewer
+with a compare wipe, a synced side-by-side player, and 👍/👎, notes and text comments saved to `feedback.json`.
 **Publishing a page means writing files.** No build step, no restart, no thumbnails to make.
 
-- [How it works](#how-it-works)
-- [Publish a page](#publish-a-page)
-- [Comments on text](#comments-on-text)
-- [Components](#components)
-- [Write a custom component](#write-a-custom-component)
-- [Rules for agents](#rules-for-agents)
-- [Contribute](#contribute)
-- [Troubleshooting](#troubleshooting)
-
-## How it works
+## Layout
 
 ```
-server.ts          Bun server: page discovery, MDX compile, media probes, thumbnails, Range video, feedback, /api/check
-app.tsx            client entry: picks the page or the list of pages
-shell/             the page around the content: layout + polling (page.tsx), contents (toc.tsx), viewer.tsx,
-                   side-by-side.tsx, the shared video clock (player.tsx), comments on selected text (comments.tsx),
-                   feedback store and URLs (state.ts)
-components/        everything a page can use, one component per file, registered in components/index.ts
+server.ts          Bun server: discovery, MDX compile, media probes, thumbnails, Range video, feedback, /api/check
+app.tsx            client entry: one page, or the list of pages
+shell/             around the content: layout + polling (page.tsx), contents (toc.tsx), viewer.tsx, side-by-side.tsx,
+                   the shared video clock (player.tsx), text comments (comments.tsx), feedback store and URLs (state.ts)
+components/        what a page can use, one per file, registered in components/index.ts
 types.ts           the page.json schema and the feedback entry
 examples/hello/    a page that uses every component
 ```
 
-One request, start to finish:
+## How it works
 
-1. **Discovery.** Any folder up to 3 levels under `ARTIFACTS_ROOTS` (default `~/Documents:~/Downloads`) that holds a
-   `page.mdx` is a page; its URL is the folder name (`/my-run`). Dot folders and `node_modules` are skipped. The scan is
-   cached for 10 s and redone at once for an unknown name, so a new page needs no restart.
-2. **MDX compile.** `page.mdx` is compiled to a JS function body on the server, once per change of the file (mtime +
-   size). Frontmatter (`title`, `description`, `order`) is read separately. On a compile error the last good version is
-   kept and the error (with line:column) goes to the page's red banner and to `/api/check`.
-3. **Data merge.** `GET /api/page/<name>` answers with one JSON: the compiled MDX, `page.json` as parsed, a probe for
-   every file the page points at (size, duration, codec, or `null` when missing), the frontmatter and `feedback.json`.
-   The server finds files by walking `page.json` (every `src` and `compare`) and by reading literal `src=`/`compare=`
-   attributes in the MDX.
-4. **Render.** The client evaluates the MDX with `components/index.ts` as its components and `page.json` as
-   `props.data`, so `{props.data.sections.map((s) => <Section key={s.id} {...s} />)}` draws the generated sections.
-   A `Section`'s `blocks` are rendered by looking each `type` up in the same registry.
-
-**Thumbnails.** Cards never load a video. `/t/<page>?src=` returns a JPEG frame made by ffmpeg (480 px high for cards,
-1600 px long side for the viewer), at most 4 encodes at a time, cached in `<page>/.review-cache/` under a key that
-includes the file's size and mtime, so a re-rendered file gets a new thumbnail by itself. Videos play only in the viewer
-and in side by side, served by `/f/<page>?src=` with Range support.
-
-**Polling.** Each open tab asks for the page every 5 s with the last ETag; the server answers `304` unless `page.mdx`,
-`page.json`, a media file or `feedback.json` changed. Hidden tabs skip. Sections open once, the first time they appear
-(`open`, plus the two newest dated ones); after that the reader's folding is never touched.
-
-**Feedback.** A vote or a note is saved 300 ms after the last keystroke with `POST /api/feedback`; the server rereads
-`feedback.json`, merges the one entry and writes it atomically (tmp + rename); a POST with `"delete": true` removes the
-entry instead. Notes being typed win over a poll. The file is keyed by card, section, note or [comment](#comments-on-text) id:
-
-```json
-{ "h-a":    { "vote": "up", "note": "keep this one", "updatedAt": "2026-11-17T10:02:11.481Z", "kind": "media",
-              "section": "colours", "sectionTitle": "A gallery of images and videos", "title": "version A", "src": "out/result-a.mp4" },
-  "colours": { "vote": null, "note": "try a third version", "updatedAt": "…", "kind": "section", "title": "A gallery of images and videos" } }
-```
-
-Entries written by older versions may carry `step`, `stepTitle`, `set`, or `section` holding a title; they still show,
-because only the id matters.
+- **Discovery.** A page is any folder up to 3 levels under `ARTIFACTS_ROOTS` (default `~/Documents:~/Downloads`) that
+  holds `page.mdx`; its URL is the folder name. Dot folders and `node_modules` are skipped. Rescanned every 10 s, and at
+  once for an unknown name.
+- **Compile.** `page.mdx` is compiled on the server once per change. Frontmatter (`title`, `description`, `order`) is read
+  separately. On a compile error the last good version stays and the error (line:column) goes to a red banner and `/api/check`.
+- **Data.** `GET /api/page/<name>` returns the compiled MDX, `page.json`, the frontmatter, `feedback.json`, and a probe
+  (size, duration, codec, or `null` when missing) for every file the page points at: each `src`/`compare` in `page.json`
+  and each literal `src=`/`compare=` attribute in the MDX.
+- **Render.** The MDX gets `components/index.ts` as its components and `page.json` as `props.data`. A `Section`'s
+  `blocks` are looked up in the same registry.
+- **Media.** Cards never load a video. `/t/<page>?src=` returns one JPEG frame made by ffmpeg (480 px high for cards,
+  1600 px long side in the viewer), cached in `<page>/.review-cache/` by size + mtime. Videos play only in the viewer and
+  side by side, from `/f/<page>?src=` with Range.
+- **Polling.** Each tab asks every 5 s with an ETag and gets `304` unless a page file, a media file or `feedback.json`
+  changed. Hidden tabs skip. Sections open once, when first seen (`open`, plus the two newest dated ones); after that the
+  reader's folding is never touched.
+- **Saving.** A vote or note is posted 300 ms after the last keystroke; the server merges that one entry into
+  `feedback.json` and writes it atomically. Notes being typed win over a poll.
 
 ## Publish a page
 
 ```
 my-run/
-  page.mdx        the article: frontmatter, prose, components (written by hand, once)
-  page.json       generated sections (scripts rewrite it, only when its content changes)
-  feedback.json   written by the app: votes, notes and text comments (never write it)
-  in/ out/ …      your files; every src is relative to the page folder and may use ../ (never outside the roots)
+  page.mdx        frontmatter, prose, components (hand-written, once)
+  page.json       generated sections (rewritten by scripts)
+  feedback.json   written by the app; never write it
+  in/ out/ …      your files; src is relative to the page folder, may use ../, never leaves the roots
 ```
 
-**page.mdx** — Markdown plus components:
+**page.mdx**
 
 ```mdx
 ---
@@ -101,8 +73,8 @@ order: oldest-first        # or newest-first: which end the two auto-opened date
 {props.data.sections.map((s) => <Section key={s.id} {...s} />)}
 ```
 
-**page.json** — the safe place for script-written text (no MDX escaping). The schema is `PageJson` in `types.ts`: a list
-of sections, each with `blocks`; a block is `{ "type": <component name>, ...its props }`.
+**page.json** holds script-written text, with no MDX escaping. Schema: `PageJson` in `types.ts`; a block is
+`{ "type": <component name>, ...its props }`.
 
 ```json
 { "sections": [ {
@@ -115,90 +87,95 @@ of sections, each with `blocks`; a block is `{ "type": <component name>, ...its 
   ] } ] }
 ```
 
-Write `page.json` to a `.tmp` file and rename it, and only when the content changed: no clocks or counters, since every
-change re-renders the reader's page.
-
-**Check, then hand over the link:**
+**Check, then hand over the section link** (`…/my-run#try-1`, not just the page name):
 
 ```sh
 curl -s 127.0.0.1:8800/api/check/my-run
 # {"ok":true,"sections":2,"media":3,"missing":["out/v3.mp4"],"errors":[],"warnings":[],"url":"…","links":{"try-1":"http://127.0.0.1:8800/my-run#try-1"}}
 ```
 
-- `ok:false`: fix it first (MDX compile error with line:column, broken JSON, duplicate id). Meanwhile the page shows the
-  last good version under a red banner.
-- `missing`: files not there yet. They show as ⏳ cards and fill in by themselves, so write the cards before the file exists.
+- `ok:false`: an MDX error (line:column), broken JSON or a duplicate id. Fix it; the page shows the last good version meanwhile.
+- `missing`: files not there yet. They show as ⏳ cards and fill in by themselves, so write cards before the files exist.
 - `warnings`: videos in a codec Chrome cannot play.
-- Hand over the section link (`…/my-run#try-1`), not just the page name.
 
-**Read the feedback** after every round:
+**Links:** `/<page>#<section-or-card-id>` opens and scrolls to it (a card gets a ring) · `?pick=a,b` rings several cards ·
+`?section=<id>` works like `#<id>` · `/` lists every page with its ❓ count and notes.
 
-```sh
-jq -r 'to_entries[] | "[\(.value.section // .key)] \(.value.title // .value.quote) | \(.value.vote // "-") | \(.value.note)"' my-run/feedback.json
-jq -r --arg t "2026-11-17T09:00" 'to_entries[] | select(.value.updatedAt > $t) | "\(.key): \(.value.note)"' my-run/feedback.json
-```
+**Keys:** viewer: ←/→ every card on the page, Ctrl/⌘+Enter saves the note and moves on, Esc closes. Side by side (▶ on a
+section with 2+ videos): one clock for all columns, untick columns, pick the sound, ←/→ one frame, space plays.
 
-**Links:** `/<page>#<section-or-card-id>` opens and scrolls to it (a card gets a ring) · `/<page>?pick=a,b` rings
-several cards · `?section=<id>` works like `#<id>` · `/` lists every page with its ❓ count and notes.
+**Rules**
 
-**Keys:** viewer: ←/→ every card on the page, Ctrl/⌘+Enter saves the note and moves on, Esc closes. Side by side (the
-▶ button on a section with 2+ videos): one clock for all columns, untick columns, pick the sound, ←/→ one frame, space plays.
+1. Point `src` at the raw files; never make thumbnails or previews.
+2. Generated text goes in `page.json`. In MDX prose a bare `<` or `{` breaks the compile: use backticks.
+3. Rewrite `page.json` only when its content changed (no clocks or counters: every change re-renders the reader's page),
+   via a `.tmp` file + rename.
+4. Never hide a result: a failed one stays, with a ❌ badge and a caption saying why.
+5. Ids (sections, cards, notes) are feedback keys: unique on the page and stable, or old notes detach.
+6. Videos in H.264, VP9 or AV1.
+7. One page per project, one server for every page: add sections, not pages or ports.
+8. Read `feedback.json` after every round and quote back what you acted on.
+9. Run `/api/check` after every change.
 
-## Comments on text
+## Feedback
 
-A reader selects any text in a section (prose, a `Code` block, a card caption, a section title), clicks the
-**💬 Comment** button that appears next to it, writes, and saves. The text gets a yellow highlight; hovering it shows the
-comment, clicking pins it, and the comment can be edited, resolved or deleted there. Resolved comments stay in the file
-but leave the page. The contents and the section header count them in 💬 with the notes.
-
-Each comment is one more entry in the same `feedback.json`, saved the same way, under a `c-<random>` id:
+`feedback.json` is keyed by card, section, note or comment id:
 
 ```json
-"c-lh8lbx": { "kind": "comment", "quote": "hand-written MDX", "prefix": " page is builtThis section is ",
+{ "h-a":    { "vote": "up", "note": "keep this one", "updatedAt": "2026-11-17T10:02:11.481Z", "kind": "media",
+              "section": "colours", "sectionTitle": "A gallery of images and videos", "title": "version A", "src": "out/result-a.mp4" },
+  "colours": { "vote": null, "note": "try a third version", "updatedAt": "…", "kind": "section", "title": "A gallery of images and videos" },
+  "c-lh8lbx": { "kind": "comment", "quote": "hand-written MDX", "prefix": " page is builtThis section is ",
               "suffix": ": Markdown plus components. Th", "section": "intro", "sectionTitle": "How this page is built",
-              "note": "Say which file this lives in.", "resolved": false, "updatedAt": "2026-11-17T12:22:43.761Z" }
+              "note": "Say which file this lives in.", "resolved": false, "updatedAt": "2026-11-17T12:22:43.761Z" } }
 ```
 
-`quote` is the selected text; `prefix` and `suffix` are up to 30 characters around it, taken from the section's text with
-no separators between elements. They are the anchor: on every render the quote is looked up word for word inside its
-section, and when it occurs more than once the occurrence whose surroundings match best wins. So a comment survives page
-re-renders and edits around it. If the quote itself is gone (reworded or removed), the comment shows as **detached**
-above the section's note box, never lost. Read the open ones after every round:
+Entries from older versions may carry `step`, `stepTitle`, `set`, or `section` holding a title; they still show.
 
 ```sh
+# everything
+jq -r 'to_entries[] | "[\(.value.section // .key)] \(.value.title // .value.quote) | \(.value.vote // "-") | \(.value.note)"' my-run/feedback.json
+# changed since a time
+jq -r --arg t "2026-11-17T09:00" 'to_entries[] | select(.value.updatedAt > $t) | "\(.key): \(.value.note)"' my-run/feedback.json
+# open text comments
 jq -r 'to_entries[] | select(.value.kind == "comment" and (.value.resolved | not)) | "[\(.value.section)] “\(.value.quote)” | \(.value.note)"' my-run/feedback.json
 ```
 
-Rewording a commented sentence detaches its comment, so when you act on a comment say so in your reply; the reader
-resolves it.
+**Text comments.** The reader selects text in a section (prose, a `Code` block, a caption, a title), clicks
+**💬 Comment** and saves. The text gets a yellow highlight; hover shows the comment, a click pins it for edit, resolve or
+delete. Resolved comments stay in the file but leave the page. 💬 counts in the contents and section header include them.
+
+`prefix` and `suffix` are up to 30 characters around the quote, from the section's text with no separators between
+elements. On every render the quote is looked up word for word in its section; if it occurs more than once, the best
+matching surroundings win. If the quote is gone (reworded or removed), the comment shows as **detached** above the
+section's note box. So rewording a commented sentence detaches it: say so in your reply, and the reader resolves it.
 
 ## Components
 
-All in `components/`, registered in `components/index.ts`. The same names work as MDX tags and as `page.json` block types.
+The same names work as MDX tags and as `page.json` block types.
 
 | Component | Props (* required) | What it renders |
 |---|---|---|
-| `Section` | `id`*, `title`*, `date`, `badges`, `open`, `blocks`, children | A foldable chapter: listed in the contents, a note box at the end (detached text comments show above it), a side-by-side button when it holds 2+ videos. `blocks` render before children. |
+| `Section` | `id`*, `title`*, `date`, `badges`, `open`, `blocks`, children | A foldable chapter, listed in the contents, with a note box at the end (detached comments above it) and a side-by-side button when it holds 2+ videos. `blocks` render before children. |
 | `Gallery` | `title`, `items` (list of `Media` props), children | A row of fixed-height cards. |
-| `Media` | `src`*, `id` (defaults to `src`), `title`, `caption`, `badges`, `compare` | An image or video card (by extension). Click opens the viewer; with `compare` (another card's id, or a path) the viewer opens with a wipe against it. |
-| `Code` | `src` or `text` or children, `title` | Verbatim text, folded to a few lines with a Copy button. `src` is re-read when the file changes. |
-| `Badge` | children (text) | A chip. Text starting with ✅ ❌ ★ ❓ is a coloured status; status badges also show next to titles and in the contents, and ❓ counts as "waiting" on the page list. |
-| `Note` | `id`*, `placeholder` | A note box saved to `feedback.json` under `id` (kind `note`). Use it to ask the reader something specific. |
-| `Markdown` | `text`* | Markdown from a string; for `page.json`, where MDX is not parsed. |
+| `Media` | `src`*, `id` (defaults to `src`), `title`, `caption`, `badges`, `compare` | An image or video card (by extension). Click opens the viewer; `compare` (another card's id, or a path) adds a wipe against it. |
+| `Code` | `src` or `text` or children, `title` | Verbatim text folded to a few lines, with Copy. `src` is re-read when the file changes. |
+| `Badge` | children (text) | A chip. Text starting with ✅ ❌ ★ ❓ is a coloured status, also shown next to titles and in the contents; ❓ counts as "waiting" on the page list. |
+| `Note` | `id`*, `placeholder` | A note box saved under `id` (kind `note`). Use it to ask the reader something specific. |
+| `Markdown` | `text`* | Markdown from a string, for `page.json`, where MDX is not parsed. |
 
-`badges` everywhere is a list of strings, each drawn as a `Badge`. Ids (sections, cards, notes) are feedback keys and
-must be unique on the page; keep them stable, or old notes detach.
+`badges` is always a list of strings, each drawn as a `Badge`.
 
 ## Write a custom component
 
 1. Create `components/<name>.tsx` exporting a function named like the file in PascalCase (`metric.tsx` → `Metric`).
-2. Register it: import it in `components/index.ts` and add it to the `components` object.
-3. Restart the server (client code is bundled at start).
+2. Import it in `components/index.ts` and add it to `components`.
+3. Restart the server.
 
-It receives its props from the MDX attributes or from the `page.json` block (every key except `type`). For page state,
-import from `shell/state.ts`: `PageCtx` (media probes, open the viewer), `SectionCtx` (the section it is in),
-`fileUrl(src)` to fetch a page file, `useReview(id)` / `edit(id, …)` to read and write feedback. Style with Tailwind and
-the classes in `styles.css` (`chip`, `badge`, `btn`, `label`); add `not-prose` so the article typography leaves it alone.
+Props come from the MDX attributes or the `page.json` block (every key but `type`). For page state import from
+`shell/state.ts`: `PageCtx` (media probes, open the viewer), `SectionCtx` (the enclosing section), `fileUrl(src)`,
+`useReview(id)` / `edit(id, …)`. Style with Tailwind and the `styles.css` classes (`chip`, `badge`, `btn`, `label`); add
+`not-prose` so the article typography leaves it alone.
 
 ```tsx
 // components/metric.tsx
@@ -216,52 +193,36 @@ import { Metric } from "./metric";
 export const components = { Badge, Code, Gallery, Markdown, Media, Metric, Note, Section };
 ```
 
-Use it as `<Metric label="Sharpness" value={31.2} unit="dB" />` in MDX, or as
-`{ "type": "Metric", "label": "Sharpness", "value": 31.2, "unit": "dB" }` in a section's `blocks`.
-
-Add a component to the repo only when it is general (nothing about one project) and earns its place; otherwise compose
-the existing ones.
-
-## Rules for agents
-
-1. Point `src` at the raw files. The server makes thumbnails and previews; never make your own.
-2. Generated text goes in `page.json`. In MDX prose a bare `<` or `{` breaks the compile: use backticks.
-3. Rewrite `page.json` only when its content changed, via `.tmp` + rename.
-4. Never hide a result: a failed one stays, with a ❌ badge and a caption saying why.
-5. Ids unique across the page and stable over time; `/api/check` enforces uniqueness.
-6. Videos in H.264, VP9 or AV1.
-7. One page per project, one server for every page. Add sections, not pages or ports.
-8. Never write `feedback.json`; read it after every round and quote back what you acted on.
-9. Run `/api/check` after every change and hand over the `#section` link.
+Then `<Metric label="Sharpness" value={31.2} unit="dB" />` in MDX, or
+`{ "type": "Metric", "label": "Sharpness", "value": 31.2, "unit": "dB" }` in `blocks`. Add a component to the repo only
+when it is general and earns its place; otherwise compose the existing ones.
 
 ## Contribute
 
-**Run it:** `bun install`, then `bun server.ts` (or the `nohup` line from the README). Restart after any change to
-`server.ts`, `app.tsx`, `shell/`, `components/` or `styles.css`; page files never need a restart. Stop it with
-`pkill -f "bun server.ts"` run as its own command.
+**Run it:** `bun install`, then `bun server.ts`. Client code is bundled at start, so restart after any change outside the
+page folders; stop it with `pkill -f "bun server.ts"` as its own command.
 
 **Code rules:**
 
 - Page components live in `components/`, one per file, export named like the file, registered only in
-  `components/index.ts`. The page shell (layout, contents, viewer, side by side) lives in `shell/` and is not a page component.
-- General only: nothing in this repo may be about one project. Project-specific shapes belong in a converter in that project.
+  `components/index.ts`. The shell (layout, contents, viewer, side by side) lives in `shell/`.
+- General only: nothing about one project. Project-specific shapes belong in a converter in that project.
 - No abstraction without a second use, no dead code, no defensive checks for things that cannot happen.
 - Comments only where the why is not obvious: one or two plain-English lines above the code, prefixed `[Agent]` when an
-  agent wrote them. No narration, no doc blocks.
-- Keep behaviour backward compatible for `feedback.json`: entries are keyed by id and merged, never rewritten wholesale.
+  agent wrote them.
+- `feedback.json` stays backward compatible: entries are keyed by id and merged, never rewritten wholesale.
 
-**Verify a change:**
+**Verify:**
 
 ```sh
-bunx -p typescript tsc --noEmit -p .                    # types
-pkill -f "bun server.ts"                                # then start it again
-curl -s 127.0.0.1:8800/api/check/hello                  # ok:true, 0 errors (out/result-c.mp4 is missing on purpose)
+bunx -p typescript tsc --noEmit -p .
+curl -s 127.0.0.1:8800/api/check/hello      # ok:true, 0 errors (out/result-c.mp4 is missing on purpose)
 ```
 
-Then open `http://127.0.0.1:8800/hello` in a browser (or headless Chrome) and click through: a card opens the viewer, a
-card with `compare` shows the wipe, a note saves to `examples/hello/feedback.json` (git-ignored), side by side plays in
-sync, selecting text offers 💬 Comment and the highlight is still there after a reload, the console has no errors. If you
-change how the example looks, retake `docs/screenshot.png` (1400 px wide, contents visible, one section open).
+Then click through `http://127.0.0.1:8800/hello` (a browser or headless Chrome): a card opens the viewer, `compare` shows
+the wipe, a note saves to `examples/hello/feedback.json` (git-ignored), side by side plays in sync, a text comment
+survives a reload, no console errors. If the example looks different, retake `docs/screenshot.png` (1400 px wide,
+contents visible, one section open).
 
 **Commits:** small [conventional commits](https://www.conventionalcommits.org) (`feat:`, `fix:`, `refactor:`, `docs:`,
 `chore:`; `!` for a breaking change to the page format), one concern each.
@@ -270,13 +231,11 @@ change how the example looks, retake `docs/screenshot.png` (1400 px wide, conten
 
 | Symptom | Cause and fix |
 |---|---|
-| Page stuck on "Loading …" | The first request probes every file of the page with ffprobe (8 at a time), so a page with hundreds of new files takes a while once. `curl -s 127.0.0.1:8800/api/check/<page>` shows whether the server answers; look in `/tmp/artifacts.log`. |
-| "Page not found" | The folder is deeper than 3 levels, under a dot folder, outside `ARTIFACTS_ROOTS`, or shares its name with another page (the first one found wins). "Failed to fetch" means the server is down. |
-| Red banner `page.mdx L:C …` | MDX compile error: a bare `<` or `{` in prose, an unclosed tag, or a broken `{…}` expression. Fix the line; the last good version shows meanwhile. |
-| Red banner "failed to render: Expected component `X` to be defined" | The tag `X` is not in `components/index.ts`. Any other "failed to render" message is a component that threw. |
-| "Unknown block type" inside a section | A `page.json` block's `type` is not a registered component name. |
-| ⚠ codec chip on a card, warning in `/api/check` | The video is not H.264/VP9/AV1. Re-encode: `ffmpeg -i in.mov -c:v libx264 -pix_fmt yuv420p -c:a aac -movflags +faststart out.mp4`. |
-| ⏳ card never fills | The `src` path is wrong (relative to the page folder) or points outside the roots. `/api/check` lists it under `missing`. |
-| Old notes gone from a card | Its id changed. Feedback is keyed by id; restore the old id. |
-| A text comment shows as "detached" | Its quote is no longer in its section, word for word (the text was reworded, or moved to another section). It keeps its note; resolve or delete it. |
-| Client change not showing | The client is bundled at server start: restart the server. |
+| Stuck on "Loading …" | The first request probes every file with ffprobe (8 at a time), so hundreds of new files take a while once. Try `/api/check/<page>` and read `/tmp/artifacts.log`. |
+| "Page not found" | The folder is deeper than 3 levels, under a dot folder, outside `ARTIFACTS_ROOTS`, or shares its name with another page (the first found wins). "Failed to fetch": the server is down. |
+| Red banner `page.mdx L:C …` | A bare `<` or `{` in prose, an unclosed tag, or a broken `{…}` expression. |
+| "failed to render: Expected component `X` to be defined" | `X` is not in `components/index.ts`. Any other "failed to render" is a component that threw. |
+| "Unknown block type" | A `page.json` block's `type` is not a registered component. |
+| ⚠ codec chip | Re-encode: `ffmpeg -i in.mov -c:v libx264 -pix_fmt yuv420p -c:a aac -movflags +faststart out.mp4`. |
+| ⏳ card never fills | Wrong `src` (relative to the page folder) or outside the roots; `/api/check` lists it under `missing`. |
+| Old notes gone from a card | Its id changed; restore the old id. |

@@ -215,10 +215,11 @@ async function getThumb(dir: string, file: string, view: boolean) {
 	const scale = view
 		? "scale='if(gt(iw,ih),min(1600,iw),-2)':'if(gt(iw,ih),-2,min(1600,ih))'"
 		: "scale=-2:'min(480,ih)'"
-	const seek = p.video ? Math.min(1, (p.dur ?? 0) / 3) : 0
+	// [Agent] Only videos get a seek: "-ss 0" before a still JPEG makes ffmpeg write an empty file and exit 0.
+	const seek = p.video ? ["-ss", String(Math.min(1, (p.dur ?? 0) / 3))] : []
 	const make = async () => {
 		await mkdir(dirname(out), { recursive: true })
-		await $`ffmpeg -v error -y -ss ${seek} -i ${file} -frames:v 1 -vf ${scale} -q:v 4 -f mjpeg ${out}.tmp`.quiet()
+		await $`ffmpeg -v error -y ${seek} -i ${file} -frames:v 1 -vf ${scale} -q:v 4 -f mjpeg ${out}.tmp`.quiet()
 		renameSync(`${out}.tmp`, out)
 		return out
 	}

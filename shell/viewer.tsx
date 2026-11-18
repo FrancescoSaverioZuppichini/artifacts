@@ -7,6 +7,7 @@ import type { Probe } from "@/types"
 import { Controls, fullScreen } from "./player"
 import { cards, fileUrl, flush, registry, thumbUrl, typing, useStore } from "./state"
 import { Votes } from "./votes"
+import { Zoom } from "./zoom"
 
 const STEPS: Record<string, number> = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }
 const label = "absolute top-2 rounded bg-black/70 px-1.5 text-[11px] font-semibold"
@@ -33,6 +34,7 @@ function Frame({ src, compare }: { src: string; compare?: string }) {
 		return (
 			<div className="grid h-full place-items-center text-muted-foreground">⏳ not there yet · {src}</div>
 		)
+	if (!probe.video && !refSrc) return <Zoom src={src} probe={probe} />
 	const fit = { aspectRatio: `${probe.w} / ${probe.h}`, width: `min(100cqw, 100cqh * ${probe.w / probe.h})` }
 	return (
 		<div className="flex h-full flex-col">

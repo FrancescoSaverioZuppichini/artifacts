@@ -9,9 +9,10 @@ with a compare wipe, a synced side-by-side player, and 👍/👎, notes and text
 ```
 server.ts          Bun server: discovery, MDX compile, media probes, thumbnails, Range video, feedback, /api/check
 app.tsx            client entry: one page, or the list of pages
-shell/             around the content: layout + polling (page.tsx), sidebar + links (toc.tsx), viewer.tsx,
-                   side-by-side.tsx, the shared video clock (player.tsx), text comments (comments.tsx, anchor.ts),
-                   the one note look (comment.tsx), dates (time.tsx), the zustand store and URLs (state.ts)
+shell/             around the content: layout + polling (page.tsx), sidebar + links (toc.tsx), viewer.tsx and
+                   its image zoom (zoom.tsx), side-by-side.tsx, the shared video clock (player.tsx), text comments
+                   (comments.tsx, anchor.ts), the one note look (comment.tsx), dates (time.tsx), the zustand store and
+                   URLs (state.ts)
 components/        what a page can use, one per file, registered in components/index.ts
 components/ui/     shadcn/ui primitives (Badge, Button, Card, Dialog, Popover, Textarea)
 lib/utils.ts       cn(), shadcn's class merger; nothing else goes here
@@ -34,8 +35,8 @@ examples/ascii/           a short blog post: ASCII art rendered to video, made b
 - **Render.** The MDX gets `components/index.ts` as its components and `page.json` as `props.data`. A `Section`'s
   `blocks` are looked up in the same registry.
 - **Media.** Cards never load a video. `/t/<page>?src=` returns one JPEG frame made by ffmpeg (480 px high for cards,
-  1600 px long side in the viewer), cached in `<page>/.review-cache/` by size + mtime. Videos play only in the viewer and
-  side by side, from `/f/<page>?src=` with Range.
+  1600 px long side in the viewer), cached in `<page>/.review-cache/` by size + mtime; a zoomed image loads the
+  original. Videos play only in the viewer and side by side, from `/f/<page>?src=` with Range.
 - **Polling.** Each tab asks every 5 s with an ETag and gets `304` unless a page file, a media file or `feedback.json`
   changed. Hidden tabs skip. Sections open once, when first seen (`open`, plus the two newest dated ones); after that the
   reader's folding is never touched.
@@ -106,8 +107,11 @@ curl -s 127.0.0.1:8800/api/check/my-run
 **Links:** `/<page>#<section-or-card-id>` opens and scrolls to it (a card gets a ring) · `?pick=a,b` rings several cards ·
 `?section=<id>` works like `#<id>` · `/` lists every page with its ❓ count and notes.
 
-**Keys:** viewer: ←/→ every card on the page, Ctrl/⌘+Enter saves the note and moves on, Esc closes. Side by side (▶ on a
-section with 2+ videos): one clock for all columns, untick columns, pick the sound, ←/→ one frame, space plays.
+**Keys:** viewer: ←/→ every card on the page, Ctrl/⌘+Enter saves the note and moves on, Esc closes. An image with no
+`compare` zooms: Ctrl/⌘+wheel or pinch at the cursor, `+`/`-`, double-click toggles fit and 100 %; wheel or drag pans;
+`0` or Esc goes back to the opening view. A strip over 3:1 opens at its width (or height), at most 100 %, from the top.
+While the image overflows, a minimap shows where you are: click or drag in it. Side by side (▶ on a section with 2+
+videos): one clock for all columns, untick columns, pick the sound, ←/→ one frame, space plays.
 
 **Rules**
 

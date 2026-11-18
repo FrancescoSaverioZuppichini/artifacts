@@ -5,6 +5,7 @@ import {
 	mkdtempSync,
 	readdirSync,
 	readFileSync,
+	rmSync,
 	statSync,
 	symlinkSync,
 	writeFileSync,
@@ -71,7 +72,10 @@ beforeAll(async () => {
 	throw Error("server did not start")
 })
 
-afterAll(() => server?.kill())
+afterAll(() => {
+	server?.kill()
+	rmSync(home, { recursive: true, force: true })
+})
 
 const getPage = (path: string) => fetch(`${base}/api/page?${q(path)}`)
 const check = async (path: string) => (await fetch(`${base}/api/check?${q(path)}`)).json()

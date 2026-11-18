@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge"
 import { Time } from "./time"
 
 type Listed = {
-	name: string
+	path: string
 	title: string
 	description: string
 	updated: number
@@ -25,13 +25,15 @@ export function Home() {
 			<h1 className="text-3xl font-semibold tracking-tight">artifacts</h1>
 			<ul className="mt-6 divide-y">
 				{list?.map((p) => (
-					<li key={p.name} className="py-4">
-						<a href={`/${encodeURIComponent(p.name)}`} className="text-lg font-medium hover:underline">
+					<li key={p.path} className="py-4">
+						<a href={`/?path=${encodeURIComponent(p.path)}`} className="text-lg font-medium hover:underline">
 							{p.title}
 						</a>
 						<p className="text-sm text-muted-foreground">{p.description}</p>
 						<div className="mt-1 flex flex-wrap gap-1.5">
-							<Badge>/{p.name}</Badge>
+							<Badge className="max-w-full" title={p.path}>
+								<span className="truncate">{p.path}</span>
+							</Badge>
 							<Badge>
 								updated <Time at={p.updated} />
 							</Badge>
@@ -41,7 +43,7 @@ export function Home() {
 					</li>
 				))}
 			</ul>
-			{list?.length === 0 && <p className="text-muted-foreground">No page.mdx found under the roots.</p>}
+			{list?.length === 0 && <p className="text-muted-foreground">No page opened yet: /?path=…/page.mdx</p>}
 		</main>
 	)
 }

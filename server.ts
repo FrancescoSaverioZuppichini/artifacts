@@ -2,7 +2,7 @@
 import { existsSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs"
 import { mkdir } from "node:fs/promises"
 import { homedir } from "node:os"
-import { basename, dirname, join, resolve, sep } from "node:path"
+import { basename, dirname, join, resolve } from "node:path"
 import { compile } from "@mdx-js/mdx"
 import { $ } from "bun"
 import pLimit from "p-limit"
@@ -13,9 +13,6 @@ import index from "./index.html"
 import { type Feedback, type PageJson, type Probe, playable } from "./types"
 
 const PORT = Number(process.env.PORT ?? 8800)
-const ROOTS = (process.env.ARTIFACTS_ROOTS ?? `${homedir()}/Documents:${homedir()}/Downloads`)
-	.split(":")
-	.filter((root) => existsSync(root))
 const MEDIA = /\.(png|jpe?g|webp|avif|gif|bmp|tiff?|mp4|webm|mov|m4v|mkv)$/i
 const VIDEO = /\.(mp4|webm|mov|m4v|mkv)$/i
 // [Agent] 300 cards opened at once would otherwise fork 300 ffprobe or ffmpeg processes.
@@ -27,28 +24,27 @@ function getStamp(file: string) {
 	const s = statSync(file, { throwIfNoEntry: false })
 	return s?.isFile() ? `${s.size}-${Math.floor(s.mtimeMs)}` : ""
 }
-const inRoots = (file: string) => ROOTS.some((root) => file.startsWith(root + sep))
 const missing = (what: string) => Response.json({ error: `Not found: ${what}` }, { status: 404 })
 
-// [Agent] Rescanned at most every 10 s, and at once for an unknown name, so a new page shows up without a
-// restart. Depth by depth, so on a name clash the shallower folder wins.
-let pages = new Map<string, string>()
-let scannedAt = 0
-function scanPages(force = false) {
-	if (!force && Date.now() - scannedAt < 10_000) return pages
-	pages = new Map()
-	for (const pattern of ["*/page.mdx", "*/*/page.mdx", "*/*/*/page.mdx"]) {
-		for (const root of ROOTS) {
-			for (const file of new Bun.Glob(pattern).scanSync({ cwd: root, absolute: true })) {
-				const dir = dirname(file)
-				if (!dir.includes("/node_modules/") && !pages.has(basename(dir))) pages.set(basename(dir), dir)
-			}
-		}
+// [Agent] Every page opened by path, keyed by its folder name: old /<name> links redirect through it and / lists
+// it. In the home folder so any clone shares it and a test can swap HOME; written only when a page is new or moved.
+const RECENT = join(homedir(), ".artifacts-recent.json")
+const recent: Record<string, string> = existsSync(RECENT) ? JSON.parse(readFileSync(RECENT, "utf8")) : {}
+
+// [Agent] `path` is the .mdx file or its folder; trimmed because a link pasted from a chat often ends in a space.
+function getPage(path: string | null) {
+	const full = path && resolve(path.trim().replace(/^~(?=\/|$)/, homedir()))
+	const file = full && (full.endsWith(".mdx") ? full : join(full, "page.mdx"))
+	if (!file || !existsSync(file)) return undefined
+	const name = basename(dirname(file))
+	if (recent[name] !== file) {
+		recent[name] = file
+		writeFileSync(RECENT, `${JSON.stringify(recent, null, 2)}\n`)
 	}
-	scannedAt = Date.now()
-	return pages
+	return file
 }
-const getDir = (name: string) => scanPages().get(name) ?? scanPages(true).get(name)
+const pageUrl = (file: string) =>
+	`http://127.0.0.1:${PORT}/?path=${encodeURIComponent(file).replaceAll("%2F", "/")}`
 
 // [Agent] Cards get their aspect ratio from the probe before any pixel loads, so nothing shifts. A file that
 // is not there yet, or is still being written, is null: ⏳.
@@ -143,21 +139,20 @@ function scanRefs(raw: string, data: PageJson) {
 	}
 }
 
-async function build(name: string, dir: string) {
-	const mdx = await parseFile(join(dir, "page.mdx"), compileMdx, { code: "", meta: {} as Meta })
+async function build(file: string) {
+	const dir = dirname(file)
+	const mdx = await parseFile(file, compileMdx, { code: "", meta: {} as Meta })
 	const data = await parseFile<PageJson>(join(dir, "page.json"), (raw) => (raw ? JSON.parse(raw) : {}), {})
 	const found = scanRefs(mdx.raw, data.value)
-	const probed = await Promise.all(
-		found.files.map((src) => resolve(dir, src)).map((f) => inRoots(f) && probe(f)),
-	)
+	const probed = await Promise.all(found.files.map((src) => probe(resolve(dir, src))))
 	const media = Object.fromEntries(found.files.map((src, i) => [src, probed[i] || null]))
 	const dupes = new Set(found.ids.filter((id, i) => found.ids.indexOf(id) !== i))
 	const errors = [mdx.error, data.error, ...[...dupes].map((id) => `duplicate id: ${id}`)].filter(Boolean)
-	return { name, ...mdx.value, data: data.value, media, errors: errors as string[], found }
+	return { file, dir, ...mdx.value, data: data.value, media, errors: errors as string[], found }
 }
 
-function check({ name, media, errors, found }: Awaited<ReturnType<typeof build>>) {
-	const url = `http://127.0.0.1:${PORT}/${encodeURIComponent(name)}`
+function check({ file, media, errors, found }: Awaited<ReturnType<typeof build>>) {
+	const url = pageUrl(file)
 	const files = Object.entries(media)
 	return {
 		ok: !errors.length,
@@ -231,11 +226,11 @@ async function getThumb(dir: string, file: string, view: boolean) {
 	return thumbs.get(out)!
 }
 
-// [Agent] src rides in the query, relative to the page folder; it may leave the folder but never the roots.
-function getFile(page: string, url: URL) {
-	const dir = getDir(page)
-	const file = dir && resolve(dir, url.searchParams.get("src") ?? "")
-	return dir && file && inRoots(file) && existsSync(file) ? { dir, file } : undefined
+// [Agent] src rides in the query, relative to the page folder, so "../" survives (browsers collapse it in a path).
+function getFile(url: URL) {
+	const page = getPage(url.searchParams.get("path"))
+	const file = page && resolve(dirname(page), url.searchParams.get("src") ?? "")
+	return page && file && existsSync(file) ? { dir: dirname(page), file } : undefined
 }
 
 Bun.serve({
@@ -245,49 +240,58 @@ Bun.serve({
 	idleTimeout: 60,
 	routes: {
 		"/": index,
-		"/:page": index,
+		// [Agent] Short links from before ?path=: the query rides along and the browser keeps the #fragment.
+		"/:name": (request) => {
+			const file = recent[request.params.name.trim()]
+			const rest = new URL(request.url).search.replace("?", "&")
+			return file ? Response.redirect(`${pageUrl(file)}${rest}`, 302) : missing(`page ${request.params.name}`)
+		},
 		"/api/pages": async (request) => {
 			const list = await Promise.all(
-				[...scanPages(true)].map(async ([name, dir]) => {
-					const p = await build(name, dir).catch(() => null)
-					return {
-						name,
-						title: p?.meta.title ?? name,
-						description: p?.meta.description ?? "",
-						updated: Math.max(
-							...["page.mdx", "page.json"].map(
-								(f) => statSync(join(dir, f), { throwIfNoEntry: false })?.mtimeMs ?? 0,
+				Object.values(recent)
+					.filter(existsSync)
+					.map(async (file) => {
+						const dir = dirname(file)
+						const p = await build(file).catch(() => null)
+						return {
+							path: file,
+							title: p?.meta.title ?? basename(dir),
+							description: p?.meta.description ?? "",
+							updated: Math.max(
+								...[file, join(dir, "page.json")].map(
+									(f) => statSync(f, { throwIfNoEntry: false })?.mtimeMs ?? 0,
+								),
 							),
-						),
-						waiting: p?.found.waiting ?? 0,
-						notes: Object.values(readFeedback(dir)).filter((r) => r.note?.trim()).length,
-					}
-				}),
+							waiting: p?.found.waiting ?? 0,
+							notes: Object.values(readFeedback(dir)).filter((r) => r.note?.trim()).length,
+						}
+					}),
 			)
 			return sendJson(
 				request,
 				list.sort((a, b) => b.updated - a.updated),
 			)
 		},
-		"/api/page/:page": async (request) => {
-			const { page } = request.params
-			const dir = getDir(page)
-			if (!dir) return missing(`page ${page}`)
-			const { code, meta, data, media, errors } = await build(page, dir)
-			const { title = page, description = "", order = "" } = meta
+		"/api/page": async (request) => {
+			const path = new URL(request.url).searchParams.get("path")
+			const page = getPage(path)
+			if (!page) return missing(`page.mdx at ${path}`)
+			const { dir, code, meta, data, media, errors } = await build(page)
+			const { title = basename(dir), description = "", order = "" } = meta
 			const feedback = readFeedback(dir)
 			return sendJson(request, { title, description, order, code, data, media, errors, feedback })
 		},
-		"/api/check/:page": async (request) => {
-			const { page } = request.params
-			const dir = getDir(page)
-			return dir ? Response.json(check(await build(page, dir))) : missing(`page ${page}`)
+		"/api/check": async (request) => {
+			const path = new URL(request.url).searchParams.get("path")
+			const page = getPage(path)
+			return page ? Response.json(check(await build(page))) : missing(`page.mdx at ${path}`)
 		},
 		"/api/feedback": {
 			POST: async (request) => {
-				const { page, id, delete: drop, ...entry } = await request.json()
-				const dir = getDir(page)
-				if (!dir || typeof id !== "string" || !id) return missing("page or id")
+				const { path, id, delete: drop, ...entry } = await request.json()
+				const page = getPage(path)
+				if (!page || typeof id !== "string" || !id) return missing("page or id")
+				const dir = dirname(page)
 				// [Agent] Reread, merge and write in one synchronous step, so overlapping saves cannot clobber each
 				// other; the rename means nobody reads half a file. Fields older versions wrote survive the spread.
 				const all = readFeedback(dir)
@@ -298,13 +302,13 @@ Bun.serve({
 				return Response.json(all[id] ?? null)
 			},
 		},
-		"/f/:page": (request) => {
-			const found = getFile(request.params.page, new URL(request.url))
+		"/f": (request) => {
+			const found = getFile(new URL(request.url))
 			return found ? sendFile(request, found.file) : missing("file")
 		},
-		"/t/:page": async (request) => {
+		"/t": async (request) => {
 			const url = new URL(request.url)
-			const found = getFile(request.params.page, url)
+			const found = getFile(url)
 			const view = url.searchParams.get("s") === "view"
 			const out = found && (await getThumb(found.dir, found.file, view).catch(() => ""))
 			if (!out) return missing("thumbnail")

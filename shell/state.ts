@@ -3,20 +3,17 @@ import { create } from "zustand"
 import { useShallow } from "zustand/react/shallow"
 import type { Feedback, MediaProps, Probe, SectionProps } from "@/types"
 
-// [Agent] Trimmed: a link pasted from a chat often carries a trailing space (…/my-page%20), which names no
-// page.
-export const page = decodeURIComponent(location.pathname.replace(/^\/|\/$/g, "")).trim()
-if (page && location.pathname !== `/${encodeURIComponent(page)}`) {
-	history.replaceState(null, "", `/${encodeURIComponent(page)}${location.search}${location.hash}`)
-}
+// [Agent] The page's .mdx file or its folder; the server resolves it, so it goes out exactly as given.
+export const path = new URLSearchParams(location.search).get("path") ?? ""
+const query = `path=${encodeURIComponent(path)}`
 export const picks = new Set(new URLSearchParams(location.search).get("pick")?.split(",").filter(Boolean))
 
 // [Agent] The src rides in the query, not the path: browsers collapse "../" in a path, and srcs may climb out
 // of the page folder.
 export const fileUrl = (src: string) =>
-	/^https?:/.test(src) ? src : `/f/${encodeURIComponent(page)}?src=${encodeURIComponent(src)}`
+	/^https?:/.test(src) ? src : `/f?${query}&src=${encodeURIComponent(src)}`
 export const thumbUrl = (src: string, probe: Probe, view = false) =>
-	`/t/${encodeURIComponent(page)}?src=${encodeURIComponent(src)}&v=${probe.v}${view ? "&s=view" : ""}`
+	`/t?${query}&src=${encodeURIComponent(src)}&v=${probe.v}${view ? "&s=view" : ""}`
 
 export const cards = () => [...document.querySelectorAll<HTMLElement>("[data-card]")].map((el) => el.id)
 export const typing = (e: Event) => ["TEXTAREA", "INPUT", "SELECT"].includes((e.target as Element).tagName)
@@ -68,9 +65,9 @@ let writes = Promise.resolve()
 // entry left was deleted.
 function body(id: string) {
 	const r = get().feedback[id]
-	if (!r) return JSON.stringify({ page, id, delete: true })
+	if (!r) return JSON.stringify({ path, id, delete: true })
 	const { kind, section, sectionTitle, title, src } = registry.get(id) ?? r
-	return JSON.stringify({ page, id, ...r, kind, section, sectionTitle, title, src: src || undefined })
+	return JSON.stringify({ path, id, ...r, kind, section, sectionTitle, title, src: src || undefined })
 }
 
 // [Agent] Chained, so the server sees writes in order and an older note never lands after a newer one.

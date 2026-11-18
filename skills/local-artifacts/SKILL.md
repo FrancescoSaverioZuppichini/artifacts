@@ -5,17 +5,18 @@ description: Publish anything the user needs to SEE as a live page in the local 
 
 # Local artifacts
 
-`~/Documents/artifacts` turns any folder up to 3 levels under `~/Documents` or `~/Downloads` that holds a
-`page.mdx` into a live page at `http://127.0.0.1:8800/<folder-name>`. It gives you foldable sections, galleries, a
-full-screen viewer with a compare wipe, a synced side-by-side video player, and 👍/👎, notes and text comments, all
-saved to `feedback.json` next to the page. Every 5 s it checks the page, its media and the feedback, and re-renders
-when any of them changes. The full reference is `~/Documents/artifacts/AGENTS.md`.
+[artifacts](https://github.com/FrancescoSaverioZuppichini/artifacts) shows any `page.mdx` on this machine as a live
+page at `http://127.0.0.1:8800/?path=/abs/path/to/page.mdx` (the folder's path works too). It gives you foldable
+sections, galleries, a full-screen viewer with a compare wipe, a synced side-by-side video player, and 👍/👎, notes
+and text comments, all saved to `feedback.json` next to the page. Every 5 s it checks the page, its media and the
+feedback, and re-renders when any of them changes. The full reference is the repo's [AGENTS.md](https://github.com/FrancescoSaverioZuppichini/artifacts/blob/main/AGENTS.md)
+(`AGENTS.md` at the repo root in a local clone).
 
 ## The hard rule: the page is one hand-edited page.mdx
 
 Publishing means editing `page.mdx` with your file tools, and nothing else. **Never write a generator, a converter
 or a background watcher to feed the page.** That means no `make_page.py`, no `results.json → page.json` chain and
-no `while true` loop. On 2026-11-17 a stale watcher kept running old code and froze a page while renders kept
+no `while true` loop. A stale watcher once kept running old code and froze a page while new results kept
 landing. The app already watches the files, so a script in between only adds another way for the page to go
 stale. Don't use `page.json` either: the examples use it for script output, which you don't have. You don't need
 a build, a restart, thumbnails or previews: the app makes its own JPEG thumbnails from the raw files.
@@ -23,10 +24,9 @@ a build, a restart, thumbnails or previews: the app makes its own JPEG thumbnail
 ## Publish
 
 1. Check that the server is up: `curl -s -o /dev/null -w '%{http_code}\n' 127.0.0.1:8800/` should print `200`.
-   If it doesn't, run this from `~/Documents/artifacts`:
+   If it doesn't, start it from the root of a clone of the repo:
    `bun install && nohup bun server.ts > /tmp/artifacts.log 2>&1 &`
-2. Use one folder per project, and give it a name no other page under `~/Documents` uses: the name is the URL, and
-   on a clash the shallower folder wins. New work on the same project is a new section, not a new page.
+2. Use one folder per project, anywhere. New work on the same project is a new section, not a new page.
 3. Write `page.mdx`, then run the check below.
 
 ```mdx
@@ -68,8 +68,7 @@ The components:
 - **`Badge`** is an inline chip in prose. A badge that starts with ✅ ❌ ★ ❓ is a coloured status, also shown
   next to the title and in the sidebar. ❓ ("your call") counts as waiting on the page list at `/`.
 
-**Paths.** `src` is relative to the page folder. `../` is fine as long as the path stays under `~/Documents` or
-`~/Downloads`. Point at the raw files. Videos must be H.264, VP9 or AV1 to play; `/api/check` warns about anything
+**Paths.** `src` is relative to the page folder, and `../` is fine. Point at the raw files. Videos must be H.264, VP9 or AV1 to play; `/api/check` warns about anything
 else. Re-encode with `ffmpeg -i in.mov -c:v libx264 -pix_fmt yuv420p -movflags +faststart out.mp4`.
 
 **Missing files are fine.** A `src` that doesn't exist yet shows as a ⏳ card and fills in by itself when the file
@@ -87,9 +86,9 @@ expression (an unknown name crashes the render).
 ## Check after every edit
 
 ```sh
-curl -s 127.0.0.1:8800/api/check/<folder>
+curl -s "127.0.0.1:8800/api/check?path=/abs/path/to/page.mdx"
 # {"ok":true,"sections":3,"media":9,"missing":["out/r2-c.png"],"errors":[],"warnings":[],
-#  "url":"http://127.0.0.1:8800/<folder>","links":{"r2":"http://127.0.0.1:8800/<folder>#r2", …}}
+#  "url":"http://127.0.0.1:8800/?path=/abs/path/to/page.mdx","links":{"r2":"…/?path=/abs/path/to/page.mdx#r2", …}}
 ```
 
 - **`ok:false` or `errors`**: an MDX error (with line:column) or a duplicate id. Fix it now: the reader keeps
@@ -99,9 +98,9 @@ curl -s 127.0.0.1:8800/api/check/<folder>
 
 ## Share links
 
-Give the section link from `links`, never just the page name: `http://127.0.0.1:8800/<folder>#<section-id>`
-(`?section=<id>` does the same). `#<card-id>` opens the page at one card and rings it, and `?pick=a,b` rings
-several cards.
+Give the section link from `links`, never just the page: `http://127.0.0.1:8800/?path=<abs path>#<section-id>`
+(`&section=<id>` does the same). `#<card-id>` opens the page at one card and rings it, and `&pick=a,b` rings
+several cards. A path with spaces or `&`, `#` must be URL-encoded; the `links` already are.
 
 ## A/B tests and comparisons
 
@@ -120,7 +119,7 @@ several cards.
 
 ## Read the feedback
 
-The app is the only writer of `<folder>/feedback.json`. It holds one entry per id, with `updatedAt` on every entry:
+The app is the only writer of `feedback.json` in the page folder. It holds one entry per id, with `updatedAt` on every entry:
 
 | `kind` | Comes from | Fields |
 |---|---|---|

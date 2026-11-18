@@ -30,6 +30,8 @@ skills/local-artifacts/   the agent skill: publish a page, share links, read fee
 - **Recent pages.** Each page opened is remembered by folder name in `~/.artifacts-recent.json`: `/` lists them, and
   an old short link `/<name>` redirects to its `?path=` (query and `#` kept).
 - **Local only.** The server listens on 127.0.0.1 and never on other interfaces, because `?path=` reads any folder.
+  Data routes answer 403 unless `Host` is `127.0.0.1`, `localhost` or `[::1]` with the port, so a website that
+  points its own domain at 127.0.0.1 (DNS rebinding) cannot read files.
 - **Compile.** `page.mdx` is compiled on the server once per change. Frontmatter (`title`, `description`, `order`) is
   YAML: quote a value that holds `: `. On a compile error the last good version stays and the error (line:column) goes
   to a red banner and `/api/check`.
@@ -244,8 +246,8 @@ curl -s "127.0.0.1:8800/api/check?path=$PWD/examples/studio-renders"   # ok:true
 curl -s "127.0.0.1:8800/api/check?path=$PWD/examples/ascii"            # ok:true, nothing missing
 ```
 
-`bun test` (server.test.ts) starts the server on a free port with a temp `HOME` and checks paths, `/api/check`,
-404s, thumbnails, Range, feedback writes, old links and the 127.0.0.1 bind. Then click through
+`bun test` (server.test.ts) starts the server with a temp `HOME` and checks `?path=`, `/api/check`, the JPEG
+thumbnail, Range, the Host 403 and an old link. Then click through
 `http://127.0.0.1:8800/?path=$PWD/examples/studio-renders` (a browser or headless Chrome): a card opens the viewer, `compare` shows
 the wipe, a note saves to `examples/studio-renders/feedback.json` (git-ignored), side by side plays in sync, a text comment
 survives a reload, a section note shows under its title and in the contents, no console errors. If the look changed,

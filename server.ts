@@ -4,7 +4,7 @@ import { mkdir } from "node:fs/promises"
 import { homedir } from "node:os"
 import { basename, dirname, join, resolve } from "node:path"
 import { compile } from "@mdx-js/mdx"
-import { $ } from "bun"
+import { $, type BunRequest } from "bun"
 import pLimit from "p-limit"
 import rehypeSlug from "rehype-slug"
 import remarkFrontmatter from "remark-frontmatter"
@@ -25,6 +25,16 @@ function getStamp(file: string) {
 	return s?.isFile() ? `${s.size}-${Math.floor(s.mtimeMs)}` : ""
 }
 const missing = (what: string) => Response.json({ error: `Not found: ${what}` }, { status: 404 })
+
+// [Agent] DNS rebinding: any website can point its own domain at 127.0.0.1 and then read files through ?path=.
+// Its requests still carry that domain in Host, so only loopback names get an answer.
+const HOSTS = [`127.0.0.1:${PORT}`, `localhost:${PORT}`, `[::1]:${PORT}`]
+function local<T extends string>(handle: (request: BunRequest<T>) => Response | Promise<Response>) {
+	return (request: BunRequest<T>) =>
+		HOSTS.includes(request.headers.get("host") ?? "")
+			? handle(request)
+			: Response.json({ error: "Forbidden: Host must be 127.0.0.1, localhost or [::1]" }, { status: 403 })
+}
 
 // [Agent] Every page opened by path, keyed by its folder name: old /<name> links redirect through it and / lists
 // it. In the home folder so any clone shares it and a test can swap HOME; written only when a page is new or moved.
@@ -241,12 +251,12 @@ Bun.serve({
 	routes: {
 		"/": index,
 		// [Agent] Short links from before ?path=: the query rides along and the browser keeps the #fragment.
-		"/:name": (request) => {
+		"/:name": local((request) => {
 			const file = recent[request.params.name.trim()]
 			const rest = new URL(request.url).search.replace("?", "&")
 			return file ? Response.redirect(`${pageUrl(file)}${rest}`, 302) : missing(`page ${request.params.name}`)
-		},
-		"/api/pages": async (request) => {
+		}),
+		"/api/pages": local(async (request) => {
 			const list = await Promise.all(
 				Object.values(recent)
 					.filter(existsSync)
@@ -271,8 +281,8 @@ Bun.serve({
 				request,
 				list.sort((a, b) => b.updated - a.updated),
 			)
-		},
-		"/api/page": async (request) => {
+		}),
+		"/api/page": local(async (request) => {
 			const path = new URL(request.url).searchParams.get("path")
 			const page = getPage(path)
 			if (!page) return missing(`page.mdx at ${path}`)
@@ -280,14 +290,14 @@ Bun.serve({
 			const { title = basename(dir), description = "", order = "" } = meta
 			const feedback = readFeedback(dir)
 			return sendJson(request, { title, description, order, code, data, media, errors, feedback })
-		},
-		"/api/check": async (request) => {
+		}),
+		"/api/check": local(async (request) => {
 			const path = new URL(request.url).searchParams.get("path")
 			const page = getPage(path)
 			return page ? Response.json(check(await build(page))) : missing(`page.mdx at ${path}`)
-		},
+		}),
 		"/api/feedback": {
-			POST: async (request) => {
+			POST: local(async (request) => {
 				const { path, id, delete: drop, ...entry } = await request.json()
 				const page = getPage(path)
 				if (!page || typeof id !== "string" || !id) return missing("page or id")
@@ -300,13 +310,13 @@ Bun.serve({
 				writeFileSync(join(dir, "feedback.json.tmp"), `${JSON.stringify(all, null, 2)}\n`)
 				renameSync(join(dir, "feedback.json.tmp"), join(dir, "feedback.json"))
 				return Response.json(all[id] ?? null)
-			},
+			}),
 		},
-		"/f": (request) => {
+		"/f": local((request) => {
 			const found = getFile(new URL(request.url))
 			return found ? sendFile(request, found.file) : missing("file")
-		},
-		"/t": async (request) => {
+		}),
+		"/t": local(async (request) => {
 			const url = new URL(request.url)
 			const found = getFile(url)
 			const view = url.searchParams.get("s") === "view"
@@ -314,7 +324,7 @@ Bun.serve({
 			if (!out) return missing("thumbnail")
 			const headers = { "Content-Type": "image/jpeg", "Cache-Control": "public, max-age=31536000, immutable" }
 			return new Response(Bun.file(out), { headers })
-		},
+		}),
 	},
 	error: (error) => Response.json({ error: error.message }, { status: 400 }),
 })

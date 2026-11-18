@@ -22,3 +22,5 @@ Pages are found up to 3 levels under `ARTIFACTS_ROOTS` (default `~/Documents:~/D
 `ARTIFACTS_ROOTS=$PWD:$HOME/Documents bun server.ts` to see the example.
 
 **[AGENTS.md](AGENTS.md)** is the full guide: publishing, components, custom components, contributing, troubleshooting.
+
+**[skills/local-artifacts](skills/local-artifacts/SKILL.md)** is the agent skill for publishing pages and reading feedback.

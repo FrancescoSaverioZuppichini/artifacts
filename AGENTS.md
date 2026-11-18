@@ -19,6 +19,7 @@ lib/utils.ts       cn(), shadcn's class merger; nothing else goes here
 types.ts           the page.json schema and the feedback entry
 examples/studio-renders/  the reference page (every component once): one sphere lit four ways, made by make.py
 examples/ascii/           a short blog post: ASCII art rendered to video, made by make.py
+skills/local-artifacts/   the agent skill: publish a page, share links, read feedback
 ```
 
 ## How it works

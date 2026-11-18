@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import type { Feedback, PageJson, Probe } from "@/types"
 import { Comments } from "./comments"
 import { SideBySide } from "./side-by-side"
-import { load, page, picks, registry, saves, setOpen, useStore } from "./state"
+import { load, path, picks, registry, saves, setOpen, useStore } from "./state"
 import { jump, openAround, sections, Toc } from "./toc"
 import { Viewer } from "./viewer"
 
@@ -89,7 +89,7 @@ export function Page() {
 			if (document.hidden && etag) return
 			try {
 				const savesAtSend = saves
-				const res = await fetch(`/api/page/${encodeURIComponent(page)}`)
+				const res = await fetch(`/api/page?path=${encodeURIComponent(path)}`)
 				if (!res.ok) throw Error((await res.json()).error)
 				if (res.headers.get("etag") === etag) return
 				const { feedback, ...next }: PageData & { feedback: Record<string, Feedback> } = await res.json()
@@ -125,11 +125,11 @@ export function Page() {
 		first = false
 	}, [data])
 
-	// [Agent] A wrong page name must say so, not spin: the poll's 404 lands here before any data exists.
+	// [Agent] A wrong path must say so, not spin: the poll's 404 lands here before any data exists.
 	if (!data || !Content) {
 		return (
 			<p className="p-8 text-muted-foreground">
-				{error ? `Page “${page}” not found (${error}). ` : `Loading ${page}…`}
+				{error ? `${error}. ` : `Loading ${path}…`}
 				{error && (
 					<a className="underline" href="/">
 						All pages

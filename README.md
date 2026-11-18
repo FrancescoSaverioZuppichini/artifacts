@@ -14,12 +14,12 @@ Needs [Bun](https://bun.sh) and `ffmpeg`/`ffprobe` on the PATH.
 
 ```sh
 bun install
-nohup bun server.ts > /tmp/artifacts.log 2>&1 &   # http://127.0.0.1:8800 lists every page
-open http://127.0.0.1:8800/studio-renders        # the reference example; /ascii is a short blog post
+nohup bun server.ts > /tmp/artifacts.log 2>&1 &              # http://127.0.0.1:8800 lists the pages you opened
+open "http://127.0.0.1:8800/?path=$PWD/examples/studio-renders"  # the reference example; examples/ascii is a blog post
 ```
 
-Pages are found up to 3 levels under `ARTIFACTS_ROOTS` (default `~/Documents:~/Downloads`). Cloned elsewhere? Run
-`ARTIFACTS_ROOTS=$PWD:$HOME/Documents bun server.ts` to see the example.
+Any `page.mdx` anywhere is a page: open `http://127.0.0.1:8800/?path=/abs/path/to/page.mdx`. The folder's path works
+too, and so does `~/…`.
 
 **[AGENTS.md](AGENTS.md)** is the full guide: publishing, components, custom components, contributing, troubleshooting.
 

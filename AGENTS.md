@@ -7,7 +7,7 @@ with a compare wipe, a synced side-by-side player, and 👍/👎, notes and text
 ## Layout
 
 ```
-server.ts          Bun server: discovery, MDX compile, media probes, thumbnails, Range video, feedback, /api/check
+server.ts          Bun server: ?path= pages, MDX compile, media probes, thumbnails, Range video, feedback, /api/check
 app.tsx            client entry: one page, or the list of pages
 shell/             around the content: layout + polling (page.tsx), sidebar + links (toc.tsx), viewer.tsx and
                    its image zoom (zoom.tsx), side-by-side.tsx, the shared video clock (player.tsx), text comments
@@ -24,20 +24,25 @@ skills/local-artifacts/   the agent skill: publish a page, share links, read fee
 
 ## How it works
 
-- **Discovery.** A page is any folder up to 3 levels under `ARTIFACTS_ROOTS` (default `~/Documents:~/Downloads`) that
-  holds `page.mdx`; its URL is the folder name. Dot folders and `node_modules` are skipped. Rescanned every 10 s, and at
-  once for an unknown name.
+- **Pages.** `/?path=<abs path>` opens a page: the path of its `.mdx` file, or of its folder (then `page.mdx` in it);
+  `~/…` works. `page.json` and `feedback.json` live in its folder, and media `src`s are relative to it. Every route
+  that takes a page takes the same `path` parameter.
+- **Recent pages.** Each page opened is remembered by folder name in `~/.artifacts-recent.json`: `/` lists them, and
+  an old short link `/<name>` redirects to its `?path=` (query and `#` kept).
+- **Local only.** The server listens on 127.0.0.1 and never on other interfaces, because `?path=` reads any folder.
+  Data routes answer 403 unless `Host` is `127.0.0.1`, `localhost` or `[::1]` with the port, so a website that
+  points its own domain at 127.0.0.1 (DNS rebinding) cannot read files.
 - **Compile.** `page.mdx` is compiled on the server once per change. Frontmatter (`title`, `description`, `order`) is
   YAML: quote a value that holds `: `. On a compile error the last good version stays and the error (line:column) goes
   to a red banner and `/api/check`.
-- **Data.** `GET /api/page/<name>` returns the compiled MDX, `page.json`, the frontmatter, `feedback.json`, and a probe
+- **Data.** `GET /api/page?path=` returns the compiled MDX, `page.json`, the frontmatter, `feedback.json`, and a probe
   (size, duration, codec, or `null` when missing) for every file the page points at: each `src`/`compare` in `page.json`
   and each literal `src=`/`compare=` attribute in the MDX.
 - **Render.** The MDX gets `components/index.ts` as its components and `page.json` as `props.data`. A `Section`'s
   `blocks` are looked up in the same registry.
-- **Media.** Cards never load a video. `/t/<page>?src=` returns one JPEG frame made by ffmpeg (480 px high for cards,
-  1600 px long side in the viewer), cached in `<page>/.review-cache/` by size + mtime; a zoomed image loads the
-  original. Videos play only in the viewer and side by side, from `/f/<page>?src=` with Range.
+- **Media.** Cards never load a video. `/t?path=…&src=` returns one JPEG frame made by ffmpeg (480 px high for cards,
+  1600 px long side in the viewer), cached in `.review-cache/` in the page folder by size + mtime; a zoomed image loads the
+  original. Videos play only in the viewer and side by side, from `/f?path=…&src=` with Range.
 - **Polling.** Each tab asks every 5 s with an ETag and gets `304` unless a page file, a media file or `feedback.json`
   changed. Hidden tabs skip. Sections open once, when first seen (`open`, plus the two newest dated ones); after that the
   reader's folding is never touched.
@@ -51,7 +56,7 @@ my-run/
   page.mdx        frontmatter, prose, components (hand-written, once)
   page.json       optional; prefer writing everything in page.mdx
   feedback.json   written by the app; never write it
-  in/ out/ …      your files; src is relative to the page folder, may use ../, never leaves the roots
+  in/ out/ …      your files; src is relative to the page folder and may use ../
 ```
 
 **page.mdx**
@@ -94,19 +99,21 @@ order: oldest-first        # or newest-first: which end the two auto-opened date
   ] } ] }
 ```
 
-**Check, then hand over the section link** (`…/my-run#try-1`, not just the page name):
+**Check, then hand over the section link** (`…/?path=…/my-run/page.mdx#try-1`, not just the page):
 
 ```sh
-curl -s 127.0.0.1:8800/api/check/my-run
-# {"ok":true,"sections":2,"media":3,"missing":["out/v3.mp4"],"errors":[],"warnings":[],"url":"…","links":{"try-1":"http://127.0.0.1:8800/my-run#try-1"}}
+curl -s "127.0.0.1:8800/api/check?path=$PWD/my-run"
+# {"ok":true,"sections":2,"media":3,"missing":["out/v3.mp4"],"errors":[],"warnings":[],"url":"…",
+#  "links":{"try-1":"http://127.0.0.1:8800/?path=/abs/my-run/page.mdx#try-1"}}
 ```
 
 - `ok:false`: an MDX error (line:column), broken JSON or a duplicate id. Fix it; the page shows the last good version meanwhile.
 - `missing`: files not there yet. They show as ⏳ cards and fill in by themselves, so write cards before the files exist.
 - `warnings`: videos in a codec Chrome cannot play.
 
-**Links:** `/<page>#<section-or-card-id>` opens and scrolls to it (a card gets a ring) · `?pick=a,b` rings several cards ·
-`?section=<id>` works like `#<id>` · `/` lists every page with its ❓ count and notes.
+**Links:** `/?path=…#<section-or-card-id>` opens and scrolls to it (a card gets a ring) · `&pick=a,b` rings several
+cards · `&section=<id>` works like `#<id>` · `/` lists the pages opened so far with their ❓ count and notes. Encode
+spaces, `&` and `#` in the path; the `url` and `links` from `/api/check` already are.
 
 **Keys:** viewer: ←/→ every card on the page, Ctrl/⌘+Enter saves the note and moves on, Esc closes. An image with no
 `compare` zooms: Ctrl/⌘+wheel or pinch at the cursor, `+`/`-`, double-click toggles fit and 100 %; wheel or drag pans;
@@ -234,15 +241,17 @@ own command.
 **Verify:**
 
 ```sh
-bunx -p typescript tsc --noEmit -p . && bunx biome check .
-curl -s 127.0.0.1:8800/api/check/studio-renders   # ok:true, 0 errors (out/upscale-2x.mp4 is missing on purpose)
-curl -s 127.0.0.1:8800/api/check/ascii            # ok:true, 0 errors, nothing missing
+bunx -p typescript tsc --noEmit -p . && bunx biome check . && bun test
+curl -s "127.0.0.1:8800/api/check?path=$PWD/examples/studio-renders"   # ok:true (out/upscale-2x.mp4 missing on purpose)
+curl -s "127.0.0.1:8800/api/check?path=$PWD/examples/ascii"            # ok:true, nothing missing
 ```
 
-Then click through `http://127.0.0.1:8800/studio-renders` (a browser or headless Chrome): a card opens the viewer, `compare` shows
+`bun test` (server.test.ts) starts the server with a temp `HOME` and checks `?path=`, `/api/check`, the JPEG
+thumbnail, Range, the Host 403 and an old link. Then click through
+`http://127.0.0.1:8800/?path=$PWD/examples/studio-renders` (a browser or headless Chrome): a card opens the viewer, `compare` shows
 the wipe, a note saves to `examples/studio-renders/feedback.json` (git-ignored), side by side plays in sync, a text comment
 survives a reload, a section note shows under its title and in the contents, no console errors. If the look changed,
-retake `docs/screenshot.png` from `/studio-renders` (1400 px wide, contents visible, one section open, one text comment and one
+retake `docs/screenshot.png` from that page (1400 px wide, contents visible, one section open, one text comment and one
 section note showing), then delete the test notes.
 
 **Commits:** small [conventional commits](https://www.conventionalcommits.org) (`feat:`, `fix:`, `refactor:`, `docs:`,
@@ -252,11 +261,11 @@ section note showing), then delete the test notes.
 
 | Symptom | Cause and fix |
 |---|---|
-| Stuck on "Loading …" | The first request probes every file with ffprobe (8 at a time), so hundreds of new files take a while once. Try `/api/check/<page>` and read `/tmp/artifacts.log`. |
-| "Page not found" | The folder is deeper than 3 levels, under a dot folder, outside `ARTIFACTS_ROOTS`, or shares its name with another page (the first found wins). "Failed to fetch": the server is down. |
+| Stuck on "Loading …" | The first request probes every file with ffprobe (8 at a time), so hundreds of new files take a while once. Try `/api/check?path=…` and read `/tmp/artifacts.log`. |
+| "Not found: page.mdx at …" | No `.mdx` at that path, or the folder has no `page.mdx`; check for an unencoded space, `&` or `#`. An old `/<name>` link 404s until its page is opened once by `?path=`. "Failed to fetch": the server is down. |
 | Red banner `page.mdx L:C …` | A bare `<` or `{` in prose, an unclosed tag, or a broken `{…}` expression. |
 | "failed to render: Expected component `X` to be defined" | `X` is not in `components/index.ts`. Any other "failed to render" is a component that threw. |
 | "Unknown block type" | A `page.json` block's `type` is not a registered component. |
 | ⚠ codec chip | Re-encode: `ffmpeg -i in.mov -c:v libx264 -pix_fmt yuv420p -c:a aac -movflags +faststart out.mp4`. |
-| ⏳ card never fills | Wrong `src` (relative to the page folder) or outside the roots; `/api/check` lists it under `missing`. |
+| ⏳ card never fills | Wrong `src` (relative to the page folder); `/api/check` lists it under `missing`. |
 | Old notes gone from a card | Its id changed; restore the old id. |

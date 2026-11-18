@@ -49,7 +49,7 @@ skills/local-artifacts/   the agent skill: publish a page, share links, read fee
 ```
 my-run/
   page.mdx        frontmatter, prose, components (hand-written, once)
-  page.json       generated sections (rewritten by scripts)
+  page.json       optional; prefer writing everything in page.mdx
   feedback.json   written by the app; never write it
   in/ out/ …      your files; src is relative to the page folder, may use ../, never leaves the roots
 ```
@@ -117,7 +117,8 @@ videos): one clock for all columns, untick columns, pick the sound, ←/→ one 
 **Rules**
 
 1. Point `src` at the raw files; never make thumbnails or previews.
-2. Generated text goes in `page.json`. In MDX prose a bare `<` or `{` breaks the compile: use backticks.
+2. Edit `page.mdx` by hand. Never feed a page from a generator/converter chain or a background watcher: one went stale and froze a page.
+   `page.json` stays supported for text a one-off script writes. In MDX prose a bare `<` or `{` breaks the compile: use backticks.
 3. Rewrite `page.json` only when its content changed (no clocks or counters: every change re-renders the reader's page),
    via a `.tmp` file + rename.
 4. Never hide a result: a failed one stays, with a ❌ badge and a caption saying why.

@@ -1,6 +1,6 @@
 ---
 name: local-artifacts
-description: Publish anything the user needs to SEE as a live page in the local artifacts app (http://127.0.0.1:8800) and read the 👍/👎, notes and comments he leaves on it. Use it for renders, images, videos, a design, a landing page, a brand kit, an A/B test or a comparison of runs or models, "show me", a set of results to review or pick from, several things side by side, or an experiment log or report with media. Use it instead of pasting file paths, opening Preview or describing images in chat, even when he doesn't name the app. Also use it at the start of every round on an existing page, to read its feedback.json.
+description: Publish anything the user needs to SEE as a live page in the local-artifacts app (http://127.0.0.1:8800) and read the 👍/👎, notes and comments the user leaves on it. Use it for renders, images, videos, a design, a landing page, a brand kit, an A/B test or a comparison of runs or models, "show me", a set of results to review or pick from, several things side by side, or an experiment log or report with media. Use it instead of pasting file paths, opening Preview or describing images in chat, even when the user doesn't name the app. Also use it at the start of every round on an existing page, to read its feedback.json.
 ---
 
 # Local artifacts
@@ -122,7 +122,7 @@ curl -s "127.0.0.1:8800/api/check?path=/abs/path/to/page.mdx"
 ```
 
 - **`ok:false` or `errors`**: an MDX error (with line:column) or a duplicate id. Fix it now: the reader keeps
-  seeing the last good version, so a broken edit is invisible to him.
+  seeing the last good version, so a broken edit is invisible to the user.
 - **`missing`**: files that don't exist yet (⏳); if one should exist by now, its `src` is wrong. **`warnings`**:
   videos in a codec Chrome can't play.
 
@@ -156,7 +156,7 @@ The app is the only writer of `feedback.json` in the page folder. It holds one e
 | `media` | a card in the viewer | `vote` (`up`, `down` or `null`), `note`, `title`, `src`, `section`, `sectionTitle` |
 | `section` | the note box at the end of a section | `note`, `title` |
 | `note` | a `<Note id>` box | `note` |
-| `comment` | text he selected in prose, a caption, a title or a `Code` block | `quote`, `prefix`/`suffix` (up to 30 characters each side), `note`, `section`, `resolved` |
+| `comment` | text the user selected in prose, a caption, a title or a `Code` block | `quote`, `prefix`/`suffix` (up to 30 characters each side), `note`, `section`, `resolved` |
 
 ```sh
 jq -r 'to_entries[] | "[\(.value.section // .key)] \(.value.title // .value.quote) | \(.value.vote // "-") | \(.value.note)"' feedback.json
@@ -164,7 +164,7 @@ jq -r --arg t "2026-11-18T09:00" 'to_entries[] | select(.value.updatedAt > $t) |
 jq -r 'to_entries[] | select(.value.kind == "comment" and (.value.resolved | not)) | "[\(.value.section)] “\(.value.quote)” | \(.value.note)"' feedback.json
 ```
 
-- Read it at the start of every round, before you plan. Act on every new vote and note, then tell him what changed,
+- Read it at the start of every round, before you plan. Act on every new vote and note, then tell the user what changed,
   quoting what you acted on.
 - Never write, edit or delete `feedback.json`, and never rename an id that has feedback.
 - A text comment is anchored to the words it quotes. If you reword that sentence, the comment shows as
@@ -172,7 +172,7 @@ jq -r 'to_entries[] | select(.value.kind == "comment" and (.value.resolved | not
 
 ## Habits
 
-- Put pictures on the page early, and add each result as it lands. A page full of ⏳ tells him nothing.
+- Put pictures on the page early, and add each result as it lands. A page full of ⏳ tells the user nothing.
 - Look at every image yourself before you claim anything about it: Read the file, and for a video pull 2–3 frames
   with ffmpeg into your scratch folder. A verdict is what you saw, not what a log said.
 - Show the inputs next to the outputs, every time.

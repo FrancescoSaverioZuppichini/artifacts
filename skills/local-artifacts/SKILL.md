@@ -26,7 +26,10 @@ a build, a restart, thumbnails or previews: the app makes its own JPEG thumbnail
 1. Check that the server is up: `curl -s -o /dev/null -w '%{http_code}\n' 127.0.0.1:8800/` should print `200`.
    If it doesn't, start it from the root of a clone of the repo:
    `bun install && nohup bun server.ts > /tmp/artifacts.log 2>&1 &`
-2. Use one folder per project, anywhere. New work on the same project is a new section, not a new page.
+2. Put the page in `~/Documents/local-artifacts/<project>/` unless the user names another folder: one subfolder per
+   project or research topic, created if missing. New work on the same project is a new section, not a new folder.
+   Never put it in a code repo or a temp/scratch folder unless asked: repos fill up with renders and scratch gets
+   wiped. If `~/Documents` syncs to iCloud, ask for a folder outside it, because renders run to gigabytes.
 3. Write `page.mdx`, then run the check below.
 
 ```mdx

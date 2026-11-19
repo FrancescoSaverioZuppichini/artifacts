@@ -21,6 +21,13 @@ open "http://127.0.0.1:8800/?path=$PWD/examples/studio-renders"  # the reference
 Any `page.mdx` anywhere is a page: open `http://127.0.0.1:8800/?path=/abs/path/to/page.mdx`. The folder's path works
 too, and so does `~/…`.
 
+Install the agent skill in Claude Code:
+
+```text
+/plugin marketplace add FrancescoSaverioZuppichini/artifacts
+/plugin install local-artifacts@artifacts
+```
+
 **[AGENTS.md](AGENTS.md)** is the full guide: publishing, components, custom components, contributing, troubleshooting.
 
 **[skills/local-artifacts](skills/local-artifacts/SKILL.md)** is the agent skill for publishing pages and reading feedback.

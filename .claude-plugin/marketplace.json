@@ -1,0 +1,20 @@
+{
+	"name": "artifacts",
+	"description": "The local-artifacts skill for the artifacts app: agents publish page.mdx review pages and read your 👍/👎 and comments.",
+	"owner": { "name": "Francesco Saverio Zuppichini", "url": "https://github.com/FrancescoSaverioZuppichini" },
+	"plugins": [
+		{
+			"name": "local-artifacts",
+			"source": "./skills/local-artifacts",
+			"description": "Publish renders, comparisons and reports as live pages in the local artifacts app (http://127.0.0.1:8800) and read the 👍/👎, notes and comments left on them.",
+			"author": {
+				"name": "Francesco Saverio Zuppichini",
+				"url": "https://github.com/FrancescoSaverioZuppichini"
+			},
+			"homepage": "https://github.com/FrancescoSaverioZuppichini/artifacts",
+			"repository": "https://github.com/FrancescoSaverioZuppichini/artifacts",
+			"keywords": ["mdx", "review", "feedback", "design-review", "local-first"],
+			"category": "productivity"
+		}
+	]
+}

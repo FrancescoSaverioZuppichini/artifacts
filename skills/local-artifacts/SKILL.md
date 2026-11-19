@@ -83,6 +83,36 @@ expression (an unknown name crashes the render).
 - Ids are the keys feedback is stored under. Keep them unique on the page and never change them, or their notes
   come loose from the cards. Prefix them with the round (`r2-a`) so they never collide.
 
+## Custom components
+
+Write one only when the built-ins can't show the thing (a metric tile, a chart, a score table); otherwise compose
+`Section`, `Gallery`, `Media`, `Code` and `Note`. A component lives in the app's clone, not in the page folder, so
+every page on the server can use it.
+
+1. Find the clone the server runs from:
+   `lsof -a -p "$(pgrep -f 'bun server.ts' | head -1)" -d cwd -Fn | sed -n 's/^n//p'`
+2. Create `components/<name>.tsx` there, exporting a function named like the file in PascalCase (`metric.tsx` →
+   `Metric`). Its props are the MDX attributes. Build it from the shadcn/ui primitives in `components/ui/` and
+   Tailwind, and put `not-prose` on its root so the article typography leaves it alone.
+3. Register it in `components/index.ts`: import it and add it to `components`.
+4. Restart the server, because client code is bundled at start: `pgrep -f "bun server.ts"`, then `kill <pid>` as its
+   own command, then start it again from the clone root (§ Publish, step 1).
+5. Use it in `page.mdx` like a built-in, `<Metric label="Sharpness" value={31.2} unit="dB" />`, and run the check.
+
+```tsx
+// components/metric.tsx
+export function Metric({ label, value, unit }: { label: string; value: number | string; unit?: string }) {
+	return <div className="not-prose mt-3 mr-2 inline-flex flex-col rounded-md border bg-muted px-3 py-2">
+		<span className="text-xs text-muted-foreground">{label}</span>
+		<b className="text-xl">{value}{unit && <span className="ml-1 text-sm text-muted-foreground">{unit}</span>}</b>
+	</div>;
+}
+```
+
+Keep it general, with no project names or paths baked in: every page sees it, and it is a change in the clone (`git
+status` there shows it). For page state (a media probe, the enclosing section, `fileUrl`) see AGENTS.md § Write a
+custom component.
+
 ## Check after every edit
 
 ```sh

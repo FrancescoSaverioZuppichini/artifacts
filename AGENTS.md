@@ -1,6 +1,6 @@
 # AGENTS.md · local-artifacts
 
-artifacts renders folders of media and text as pages: a contents sidebar, foldable sections, cards, a full-screen viewer
+local-artifacts renders folders of media and text as pages: a contents sidebar, foldable sections, cards, a full-screen viewer
 with a compare wipe, a synced side-by-side player, and 👍/👎, notes and text comments saved to `feedback.json`.
 **Publishing a page means writing files.** No build step, no restart, no thumbnails to make.
 

@@ -5,11 +5,11 @@ description: Publish anything the user needs to SEE as a live page in the local 
 
 # Local artifacts
 
-[artifacts](https://github.com/FrancescoSaverioZuppichini/artifacts) shows any `page.mdx` on this machine as a live
+[local-artifacts](https://github.com/FrancescoSaverioZuppichini/local-artifacts) shows any `page.mdx` on this machine as a live
 page at `http://127.0.0.1:8800/?path=/abs/path/to/page.mdx` (the folder's path works too). It gives you foldable
 sections, galleries, a full-screen viewer with a compare wipe, a synced side-by-side video player, and 👍/👎, notes
 and text comments, all saved to `feedback.json` next to the page. Every 5 s it checks the page, its media and the
-feedback, and re-renders when any of them changes. The full reference is the repo's [AGENTS.md](https://github.com/FrancescoSaverioZuppichini/artifacts/blob/main/AGENTS.md)
+feedback, and re-renders when any of them changes. The full reference is the repo's [AGENTS.md](https://github.com/FrancescoSaverioZuppichini/local-artifacts/blob/main/AGENTS.md)
 (`AGENTS.md` at the repo root in a local clone).
 
 ## The hard rule: the page is one hand-edited page.mdx

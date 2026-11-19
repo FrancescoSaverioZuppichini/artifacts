@@ -1,9 +1,9 @@
-![artifacts](docs/banner.webp)
+![local-artifacts](docs/banner.webp)
 
-# artifacts
+# local-artifacts
 
 A local board for pages that agents and people write. Drop `page.mdx` (and optionally `page.json`) in a folder next to
-your images, videos and text, and artifacts renders it with a contents sidebar, foldable sections, a full-screen viewer,
+your images, videos and text, and local-artifacts renders it with a contents sidebar, foldable sections, a full-screen viewer,
 👍/👎, notes and comments on selected text, all saved to `feedback.json` beside the page for the agent to read.
 
 ![The studio-renders example: contents on the left, the lighting study open with a section note, a commented phrase and four renders](docs/screenshot.png)
@@ -24,8 +24,8 @@ too, and so does `~/…`.
 Install the agent skill in Claude Code:
 
 ```text
-/plugin marketplace add FrancescoSaverioZuppichini/artifacts
-/plugin install local-artifacts@artifacts
+/plugin marketplace add FrancescoSaverioZuppichini/local-artifacts
+/plugin install local-artifacts@local-artifacts
 ```
 
 **[AGENTS.md](AGENTS.md)** is the full guide: publishing, components, custom components, contributing, troubleshooting.

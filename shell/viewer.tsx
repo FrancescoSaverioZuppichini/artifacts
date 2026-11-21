@@ -101,15 +101,10 @@ export function Viewer() {
 						{item.sectionTitle && <span className="text-muted-foreground">{item.sectionTitle} /</span>}
 						<Badges list={item.badges} status />
 						<DialogTitle className="text-sm">{item.title}</DialogTitle>
-						{item.caption && <span className="text-muted-foreground">{item.caption}</span>}
+						{item.caption && (
+							<span className="min-w-0 break-words text-muted-foreground">{item.caption}</span>
+						)}
 						<Badges list={item.badges} status={false} />
-						<a
-							href={fileUrl(item.src)}
-							download={item.src.split("/").pop()}
-							className="text-sky-300 underline"
-						>
-							⬇ original
-						</a>
 					</div>
 					<Button aria-label="Previous" onClick={() => go(-1)}>
 						←
@@ -118,6 +113,13 @@ export function Viewer() {
 						→
 					</Button>
 					<Votes id={id} />
+					{/* [Agent] In the button row, not after the caption: a long caption pushed the link off the screen. It
+					    serves the file as it is on disk, so the download is the original at full resolution. */}
+					<Button asChild>
+						<a href={fileUrl(item.src)} download={item.src.split("/").pop()}>
+							⬇ Download
+						</a>
+					</Button>
 					<div className="min-w-60 flex-1 *:mt-0">
 						<Note
 							key={id}
